@@ -28,6 +28,8 @@ def setup_claim(db):
         OpportunityInput(
             title="Synthetic test only",
             official_url="https://example.com/claim",
+            record_type="open_claim",
+            official_notice_url="https://example.com/notice",
             deadline=utcnow() + timedelta(days=5),
             rules=[{"field": "purchased", "op": "eq", "value": True}],
             attestation_text="Synthetic test declaration",
@@ -43,6 +45,7 @@ def setup_claim(db):
             administrator_verified=True,
             official_form_verified=True,
             criteria_and_deadline_verified=True,
+            claim_window_confirmed=True,
             notes="Synthetic fixture reviewed for testing",
         ),
     )
@@ -82,6 +85,7 @@ def test_unknown_proof_requirements_block_verification(db):
                 administrator_verified=True,
                 official_form_verified=True,
                 criteria_and_deadline_verified=True,
+                claim_window_confirmed=True,
                 notes="Synthetic test review notes.",
             ),
         )

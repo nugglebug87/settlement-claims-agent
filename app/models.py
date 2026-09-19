@@ -1,7 +1,18 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.engine import utcnow
@@ -28,6 +39,8 @@ class Source(Record, Base):
     name: Mapped[str] = mapped_column(String(200))
     url: Mapped[str] = mapped_column(Text, unique=True)
     kind: Mapped[str] = mapped_column(String(30), default="json")
+    stream: Mapped[str] = mapped_column(String(40), default="settlements", server_default="settlements")
+    source_role: Mapped[str] = mapped_column(String(40), default="directory", server_default="directory")
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     last_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
@@ -41,6 +54,17 @@ class Opportunity(Record, Base):
     case_number: Mapped[str | None] = mapped_column(String(200))
     case_key: Mapped[str | None] = mapped_column(String(200), unique=True)
     administrator: Mapped[str | None] = mapped_column(String(300))
+    defendant: Mapped[str | None] = mapped_column(String(300))
+    record_type: Mapped[str] = mapped_column(String(40), default="unknown", server_default="unknown")
+    program_type: Mapped[str] = mapped_column(String(40), default="settlements", server_default="settlements")
+    official_notice_url: Mapped[str | None] = mapped_column(Text)
+    claim_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eligibility_start: Mapped[date | None] = mapped_column(Date)
+    eligibility_end: Mapped[date | None] = mapped_column(Date)
+    documentation_requirements: Mapped[str | None] = mapped_column(Text)
+    payment_timeline: Mapped[str | None] = mapped_column(Text)
+    possible_duplicate_ids: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    duplicate_review_notes: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(30), default="other")
     summary: Mapped[str] = mapped_column(Text, default="")
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -102,3 +126,11 @@ class SourceRun(Record, Base):
     imported: Mapped[int] = mapped_column(Integer, default=0)
     duplicates: Mapped[int] = mapped_column(Integer, default=0)
     message: Mapped[str] = mapped_column(Text, default="")
+
+
+class DiscoveryObservation(Record, Base):
+    __tablename__ = "discovery_observations"
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id"))
+    source_id: Mapped[str | None] = mapped_column(ForeignKey("sources.id"))
+    payload: Mapped[dict] = mapped_column(JSON)
+    changed_fields: Mapped[list] = mapped_column(JSON, default=list)

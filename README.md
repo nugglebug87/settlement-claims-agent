@@ -229,3 +229,39 @@ railway.json
 ```
 
 Design asset provenance and font licenses: [docs/design.md](docs/design.md).
+# Discovery streams and retained breach announcements
+
+The opportunity collection retains three independently scheduled streams: settlements,
+government refunds, and breach announcements. Breach notices stay in the database even
+when no compensation program exists. Filter **Discovery stream → breach announcements**
+to review them. A breach announcement does not establish that the user was affected.
+
+Records distinguish unknown leads, breach announcements, investigations, proposed
+settlements, open claims, automatic payments, expired cases, and closed cases. Only a
+verified open claim can be prepared. Verification requires an official notice URL and
+explicit confirmation of the open claim window, in addition to the existing safeguards.
+Older records migrate to unknown and need classification before further filing actions.
+
+In Sources, **Add supplied source catalog** imports the 28 distinct supplied locations,
+including six breach sources, without duplicates. They start paused. Configure exact
+hostnames in `SOURCE_ALLOWED_HOSTS`, then enable the reviewed sources individually.
+Catalog inclusion is not verification of a website or administrator. Some supplied
+homepages redirect or need a more specific listing URL; failed fetches are visible in
+discovery history. Add a corrected source URL when necessary. Redirects are not followed.
+No Have I Been Pwned email, password, identity lookup, or private account access is performed.
+
+`html_links` discovery retains up to 30 relevant public links per fetched page without
+an AI key. It does not crawl linked pages or invent terms. `html_ai` optionally extracts
+structured candidate terms with source excerpts; human source review remains mandatory.
+Record the official notice, defendant, eligibility dates, documentation requirements,
+and stated payment timeline when supported by evidence. The recorded claim URL can be
+corrected before human handoff; prepared approvals then require renewal.
+
+Exact URL and case-number matches deduplicate. Defendant/administrator matches flag
+potential duplicates for a documented review rather than merging unrelated cases.
+Repeat discovery stores observations. Changed terms revoke source verification and
+require review and corrected details before filing. Breach announcements can be updated
+to open claims only when official evidence supports that change; historical observations
+remain available. At the default 15-minute worker interval, one due source in each stream
+runs per tick, with each source eligible again after 24 hours. This is a bounded listing
+monitor, not exhaustive web search or a guarantee that every new case will be found.

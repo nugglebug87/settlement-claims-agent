@@ -16,6 +16,8 @@ def test_entire_api_claim_lifecycle_with_evidence(client):
     payload = {
         "title": "SYNTHETIC TEST - not a real settlement",
         "official_url": "https://example.com/test-only",
+        "record_type": "open_claim",
+        "official_notice_url": "https://example.com/notice",
         "case_number": "TEST COURT / TEST 1",
         "administrator": "Synthetic test administrator",
         "deadline": (utcnow() + timedelta(days=5)).isoformat(),
@@ -37,6 +39,7 @@ def test_entire_api_claim_lifecycle_with_evidence(client):
                 "administrator_verified": True,
                 "official_form_verified": True,
                 "criteria_and_deadline_verified": True,
+                "claim_window_confirmed": True,
                 "notes": "Synthetic test review notes only.",
             },
         ).status_code

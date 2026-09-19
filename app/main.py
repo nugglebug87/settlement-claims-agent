@@ -11,6 +11,10 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import services
+from app.source_catalog import CATALOG
+from app.engine import record_classification
+from app.models import DiscoveryObservation
+from app.schemas import DuplicateReviewInput
 from app.auth import authenticate, create_session, rate_limit_login, signature
 from app.config import settings
 from app.db import get_db
@@ -180,6 +184,7 @@ def enriched(opportunity, person):
     eligibility = evaluate(opportunity.rules, person.facts)
     return {
         **record(opportunity),
+        "classification": record_classification(opportunity),
         "eligibility": eligibility,
         "priority": priority(
             eligibility["status"],
@@ -187,7 +192,7 @@ def enriched(opportunity, person):
             opportunity.expected_payout,
             opportunity.category,
             opportunity.proof_required,
-            opportunity.verified,
+            opportunity.verified and record_classification(opportunity) == "open_claim",
         ),
     }
 
@@ -226,11 +231,15 @@ def add_opportunity(data: OpportunityInput, db=Depends(get_db)):
 @app.put("/api/opportunities/{id}", dependencies=[Depends(authenticate)])
 def edit_opportunity(id: str, data: OpportunityInput, db=Depends(get_db)):
     row = get_record(db, Opportunity, id, True)
-    # A URL identifies the case; changing it can create a duplicate submission path.
+    # A discovered article can be replaced with its verified official form before handoff.
     if fingerprint(data.official_url) != row.fingerprint:
-        raise HTTPException(
-            409, "Canonical claim URL cannot change. Import a different opportunity separately."
-        )
+        if db.scalar(
+            select(Claim).where(
+                Claim.opportunity_id == id, Claim.status.notin_(["prepared", "approved_for_handoff"])
+            )
+        ):
+            raise HTTPException(409, "Claim URL cannot change after human handoff.")
+        row.fingerprint = fingerprint(data.official_url)
     for key, value in data.model_dump(exclude={"source_excerpt"}).items():
         setattr(row, key, value)
     row.case_key = case_key(data.case_number)
@@ -238,6 +247,31 @@ def edit_opportunity(id: str, data: OpportunityInput, db=Depends(get_db)):
     row.quality_flags = quality_flags(data.official_url, data.source_excerpt + " " + data.summary)
     row.verified, row.verification_notes, row.revision = False, None, row.revision + 1
     services.audit(db, "opportunity.updated", id, {"revision": row.revision})
+    db.commit()
+    return record(row)
+
+
+@app.get("/api/opportunities/{id}/observations", dependencies=[Depends(authenticate)])
+def observations(id: str, db=Depends(get_db)):
+    get_record(db, Opportunity, id)
+    return [
+        record(o)
+        for o in db.scalars(
+            select(DiscoveryObservation)
+            .where(DiscoveryObservation.opportunity_id == id)
+            .order_by(DiscoveryObservation.created_at.desc())
+            .limit(100)
+        )
+    ]
+
+
+@app.post("/api/opportunities/{id}/duplicate-review", dependencies=[Depends(authenticate)])
+def review_duplicate(id: str, data: DuplicateReviewInput, db=Depends(get_db)):
+    row = get_record(db, Opportunity, id, True)
+    row.duplicate_review_notes = data.notes
+    row.verified = False
+    row.revision += 1
+    services.audit(db, "opportunity.duplicate_reviewed", id, data.model_dump())
     db.commit()
     return record(row)
 
@@ -338,6 +372,22 @@ def add_source(data: SourceInput, db=Depends(get_db)):
     services.audit(db, "source.created", row.id)
     db.commit()
     return record(row)
+
+
+@app.post("/api/source-catalog", dependencies=[Depends(authenticate)])
+def import_catalog(db=Depends(get_db)):
+    existing = set(db.scalars(select(Source.url)))
+    count = 0
+    for name, url, stream, role in CATALOG:
+        if url not in existing:
+            db.add(
+                Source(name=name, url=url, stream=stream, source_role=role, kind="html_links", enabled=False)
+            )
+            existing.add(url)
+            count += 1
+    services.audit(db, "sources.catalog_imported", "owner", {"added": count})
+    db.commit()
+    return {"added": count}
 
 
 @app.post("/api/sources/{id}/toggle", dependencies=[Depends(authenticate)])

@@ -5,8 +5,17 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.engine import aware, case_key, evaluate, fingerprint, quality_flags, utcnow
-from app.models import Audit, Claim, Evidence, Notification, Opportunity
+from app.engine import (
+    aware,
+    case_key,
+    evaluate,
+    fingerprint,
+    identity_text,
+    quality_flags,
+    record_classification,
+    utcnow,
+)
+from app.models import Audit, Claim, DiscoveryObservation, Evidence, Notification, Opportunity
 
 
 def audit(db, action, entity_id, details=None, actor="owner"):
@@ -24,6 +33,50 @@ def ingest(db, data, source_id=None):
     if not existing and data.case_number:
         existing = db.scalar(select(Opportunity).where(Opportunity.case_key == case_key(data.case_number)))
     if existing:
+        changes = []
+        for field in (
+            "record_type",
+            "deadline",
+            "claim_opens_at",
+            "rules",
+            "attestation_text",
+            "proof_required",
+            "official_url",
+            "eligibility_start",
+            "eligibility_end",
+            "documentation_requirements",
+            "payment_timeline",
+            "expected_payout",
+        ):
+            if field not in data.model_fields_set:
+                continue
+            old, new = getattr(existing, field), data.model_dump()[field]
+            if new is None or new == [] or (field == "record_type" and new == "unknown"):
+                continue
+            if field == "expected_payout" and old is not None:
+                old = float(old)
+            if isinstance(old, datetime):
+                old = aware(old)
+            if old != new:
+                changes.append(field)
+        db.add(
+            DiscoveryObservation(
+                opportunity_id=existing.id,
+                source_id=source_id,
+                payload=data.model_dump(mode="json"),
+                changed_fields=changes,
+            )
+        )
+        if changes:
+            existing.verified = False
+            existing.revision += 1
+            existing.quality_flags = list(set(existing.quality_flags + ["source_change_requires_review"]))
+            notify(
+                db,
+                f"changed:{existing.id}:{existing.revision}",
+                "Discovered terms changed",
+                f"{existing.title}: review {', '.join(changes)} against the official notice before filing.",
+            )
         audit(db, "discovery.duplicate", existing.id, {"source_id": source_id})
         return existing, True
     values = data.model_dump(exclude={"source_excerpt"})
@@ -44,12 +97,45 @@ def ingest(db, data, source_id=None):
     )
     db.add(opportunity)
     db.flush()
+    if data.defendant and data.administrator:
+        matches = [
+            o
+            for o in db.scalars(select(Opportunity).where(Opportunity.id != opportunity.id))
+            if identity_text(o.defendant) == identity_text(data.defendant)
+            and identity_text(o.administrator) == identity_text(data.administrator)
+            and not (o.case_key and opportunity.case_key and o.case_key != opportunity.case_key)
+        ]
+        opportunity.possible_duplicate_ids = [o.id for o in matches]
+        for other in matches:
+            other.possible_duplicate_ids = sorted(set(other.possible_duplicate_ids + [opportunity.id]))
+            other.duplicate_review_notes = None
+            other.verified = False
+            other.revision += 1
+    db.add(
+        DiscoveryObservation(
+            opportunity_id=opportunity.id,
+            source_id=source_id,
+            payload=data.model_dump(mode="json"),
+            changed_fields=[],
+        )
+    )
     audit(db, "opportunity.discovered", opportunity.id)
     notify(db, f"discovered:{opportunity.id}", "Opportunity needs review", opportunity.title)
     return opportunity, False
 
 
 def verify(db, opportunity, data):
+    if record_classification(opportunity) != "open_claim":
+        raise HTTPException(
+            409,
+            "Only a confirmed, currently open claim window can be verified for filing. Other records remain in discovery.",
+        )
+    if opportunity.possible_duplicate_ids and not opportunity.duplicate_review_notes:
+        raise HTTPException(409, "Review the potential defendant/administrator duplicate before verifying.")
+    if "source_change_requires_review" in opportunity.quality_flags:
+        raise HTTPException(
+            409, "Review discovery observations and save corrected terms before re-verifying."
+        )
     if any(
         f in opportunity.quality_flags
         for f in ["https_required", "non_public_host", "embedded_credentials", "payment_request"]
@@ -65,6 +151,7 @@ def verify(db, opportunity, data):
         or not opportunity.administrator
         or not opportunity.provenance.get("excerpt")
         or opportunity.proof_required is None
+        or not opportunity.official_notice_url
     ):
         raise HTTPException(
             409,
@@ -77,6 +164,12 @@ def verify(db, opportunity, data):
 
 
 def ready(profile, opportunity):
+    if record_classification(opportunity) != "open_claim":
+        raise HTTPException(
+            409, "This record is not a currently open claim. It remains available for monitoring."
+        )
+    if opportunity.possible_duplicate_ids and not opportunity.duplicate_review_notes:
+        raise HTTPException(409, "Possible duplicate requires a documented review.")
     if not opportunity.verified:
         raise HTTPException(409, "Administrator and official form require human verification.")
     if not opportunity.deadline or aware(opportunity.deadline) <= utcnow():
@@ -122,6 +215,13 @@ def prepare(db, profile, opportunity):
         "attestation_text": opportunity.attestation_text,
         "prepared_at": utcnow().isoformat(),
         "deadline": aware(opportunity.deadline).isoformat(),
+        "official_notice_url": opportunity.official_notice_url,
+        "eligibility_period": {
+            "start": opportunity.eligibility_start.isoformat() if opportunity.eligibility_start else None,
+            "end": opportunity.eligibility_end.isoformat() if opportunity.eligibility_end else None,
+        },
+        "documentation_requirements": opportunity.documentation_requirements,
+        "payment_timeline": opportunity.payment_timeline,
     }
     digest = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()
     if not claim:

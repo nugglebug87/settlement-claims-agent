@@ -2,6 +2,7 @@
 
 import hashlib
 import ipaddress
+import re
 from datetime import date, datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -32,6 +33,19 @@ def fingerprint(url):
 
 def case_key(case_number):
     return " ".join(case_number.casefold().split()) if case_number and case_number.strip() else None
+
+
+def identity_text(value):
+    return re.sub(r"[^a-z0-9]", "", (value or "").casefold())
+
+
+def record_classification(opportunity, now=None):
+    if opportunity.record_type == "open_claim":
+        if opportunity.deadline and aware(opportunity.deadline) <= (now or utcnow()):
+            return "expired"
+        if opportunity.claim_opens_at and aware(opportunity.claim_opens_at) > (now or utcnow()):
+            return "not_yet_open"
+    return opportunity.record_type
 
 
 def evaluate(rules, facts):

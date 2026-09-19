@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db import Session
 from app.discovery import run_source
-from app.engine import aware, utcnow
+from app.engine import aware, record_classification, utcnow
 from app.models import Claim, Opportunity, Source
 from app.services import notify
 
@@ -26,7 +26,7 @@ def redis_client():
 def monitor(db):
     now = utcnow()
     for opportunity in db.scalars(select(Opportunity)):
-        if opportunity.deadline:
+        if opportunity.deadline and record_classification(opportunity) == "open_claim":
             days = (aware(opportunity.deadline) - now).total_seconds() / 86400
             if 0 <= days <= 14:
                 band = "1" if days <= 1 else "3" if days <= 3 else "14"
@@ -53,6 +53,24 @@ def monitor(db):
             )
 
 
+def due_sources(db, now=None):
+    now = now or utcnow()
+    result = []
+    # One due source per stream per tick prevents breach/government leads being starved by directories.
+    for stream in ("settlements", "government_refunds", "breach_announcements"):
+        sources = db.scalars(
+            select(Source)
+            .where(Source.enabled.is_(True), Source.stream == stream)
+            .order_by(Source.last_run.asc().nullsfirst(), Source.created_at.asc())
+        )
+        due = next(
+            (s for s in sources if not s.last_run or aware(s.last_run) <= now - timedelta(days=1)), None
+        )
+        if due:
+            result.append(due)
+    return result
+
+
 def tick():
     client = redis_client()
     lock = client.lock("settlement-agent:monitor", timeout=600, blocking_timeout=0) if client else None
@@ -63,12 +81,7 @@ def tick():
             monitor(db)
             db.commit()
             # Bound each tick to three sources; each source is refreshed at most daily.
-            sources = list(
-                db.scalars(select(Source).where(Source.enabled.is_(True)).order_by(Source.last_run.asc()))
-            )
-            due = [s for s in sources if not s.last_run or aware(s.last_run) < utcnow() - timedelta(days=1)][
-                :3
-            ]
+            due = due_sources(db)
             for source in due:
                 run_source(db, source)
                 db.commit()
