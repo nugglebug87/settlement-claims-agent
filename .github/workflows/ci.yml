@@ -1,0 +1,47 @@
+name: Verify application
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: claims
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: claims
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U claims"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check app tests && ruff format --check app tests migrations
+      - run: pytest -q
+      - name: PostgreSQL migrations and production startup
+        env:
+          APP_ENV: production
+          DATABASE_URL: postgresql://claims:test-only-password@localhost:5432/claims
+          REDIS_URL: redis://localhost:6379/0
+          APP_PASSWORD: ci-only-long-password
+          SESSION_SECRET: ci-only-session-secret-at-least-32-characters
+          APP_URL: https://claims.example.test
+          WORKER_ENABLED: "false"
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+          python -m app.start > /tmp/claims-startup.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail http://localhost:8000/health; then break; fi
+            sleep 1
+          done
+          curl --fail http://localhost:8000/health
+          curl --fail http://localhost:8000/ > /dev/null
