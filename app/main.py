@@ -376,18 +376,53 @@ def add_source(data: SourceInput, db=Depends(get_db)):
 
 @app.post("/api/source-catalog", dependencies=[Depends(authenticate)])
 def import_catalog(db=Depends(get_db)):
-    existing = set(db.scalars(select(Source.url)))
+    rows = list(db.scalars(select(Source)))
+    existing_urls = {row.url for row in rows}
+    existing_by_name = {row.name: row for row in rows}
     count = 0
+    updated = 0
     for name, url, stream, role in CATALOG:
-        if url not in existing:
+        current = existing_by_name.get(name)
+        if current and current.url != url and url not in existing_urls:
+            existing_urls.discard(current.url)
+            current.url = url
+            existing_urls.add(url)
+            updated += 1
+        elif current is None and url not in existing_urls:
             db.add(
                 Source(name=name, url=url, stream=stream, source_role=role, kind="html_links", enabled=False)
             )
-            existing.add(url)
+            existing_urls.add(url)
             count += 1
-    services.audit(db, "sources.catalog_imported", "owner", {"added": count})
+    services.audit(db, "sources.catalog_imported", "owner", {"added": count, "updated": updated})
     db.commit()
-    return {"added": count}
+    return {"added": count, "updated": updated}
+
+
+@app.post("/api/sources/enable-all", dependencies=[Depends(authenticate)])
+def enable_all_sources(db=Depends(get_db)):
+    rows = list(db.scalars(select(Source).with_for_update()))
+    changed = 0
+    for row in rows:
+        if not row.enabled:
+            row.enabled = True
+            changed += 1
+    services.audit(db, "sources.enabled_all", "owner", {"changed": changed, "total": len(rows)})
+    db.commit()
+    return {"enabled": len(rows), "changed": changed}
+
+
+@app.post("/api/sources/disable-all", dependencies=[Depends(authenticate)])
+def disable_all_sources(db=Depends(get_db)):
+    rows = list(db.scalars(select(Source).with_for_update()))
+    changed = 0
+    for row in rows:
+        if row.enabled:
+            row.enabled = False
+            changed += 1
+    services.audit(db, "sources.disabled_all", "owner", {"changed": changed, "total": len(rows)})
+    db.commit()
+    return {"disabled": len(rows), "changed": changed}
 
 
 @app.post("/api/sources/{id}/toggle", dependencies=[Depends(authenticate)])
