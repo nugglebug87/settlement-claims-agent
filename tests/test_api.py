@@ -73,3 +73,54 @@ def test_invalid_deadline_and_money_are_rejected(client):
         },
     )
     assert response.status_code == 422
+
+
+def test_all_sources_can_be_enabled_and_disabled_together(client):
+    headers = login(client)
+    imported = client.post("/api/source-catalog", headers=headers)
+    assert imported.status_code == 200
+    assert imported.json()["added"] > 0
+
+    enabled = client.post("/api/sources/enable-all", headers=headers)
+    assert enabled.status_code == 200
+    assert enabled.json() == {
+        "enabled": imported.json()["added"],
+        "changed": imported.json()["added"],
+    }
+    assert all(source["enabled"] for source in client.get("/api/sources").json()["sources"])
+
+    enabled_again = client.post("/api/sources/enable-all", headers=headers)
+    assert enabled_again.json()["changed"] == 0
+
+    disabled = client.post("/api/sources/disable-all", headers=headers)
+    assert disabled.status_code == 200
+    assert disabled.json()["disabled"] == imported.json()["added"]
+    assert disabled.json()["changed"] == imported.json()["added"]
+    assert not any(source["enabled"] for source in client.get("/api/sources").json()["sources"])
+
+
+def test_catalog_import_refreshes_an_existing_redirect_url(client, monkeypatch):
+    monkeypatch.setattr(settings, "source_allowed_hosts", "claimdepot.com")
+    monkeypatch.setattr("app.main.validate_source_url", lambda url: None)
+    headers = login(client)
+    created = client.post(
+        "/api/sources",
+        headers=headers,
+        json={
+            "name": "Claim Depot",
+            "url": "https://claimdepot.com/",
+            "kind": "html_links",
+            "stream": "settlements",
+            "source_role": "directory",
+            "enabled": False,
+        },
+    )
+    assert created.status_code == 200
+
+    imported = client.post("/api/source-catalog", headers=headers)
+    assert imported.status_code == 200
+    assert imported.json()["updated"] == 1
+    claim_depot = next(
+        source for source in client.get("/api/sources").json()["sources"] if source["name"] == "Claim Depot"
+    )
+    assert claim_depot["url"] == "https://www.claimdepot.com/"
