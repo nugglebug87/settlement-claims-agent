@@ -3,121 +3,196 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-…10891 tokens truncated…['gte','At least'],['lte','At most'],['date_on_or_after','Date on / after'],['date_on_or_before','Date on / before']].map(([v,l])=>`<option value="${v}" ${rule.op===v?'selected':''}>${l}</option>`).join('')}</select><input aria-label="Required value" class="rule-value" placeholder='true, 50, or "CA"' value="${esc(value)}" required><button type="button" class="icon-button remove-row" aria-label="Remove criterion">×</button></div><input class="rule-question" aria-label="Eligibility question" placeholder="Question shown to the claimant" value="${esc(rule.question||'')}"></div>`;
-}
-function opportunityForm(id) {
-  const o=state.data.opportunities.find(o=>o.id===id)||{};
-  modal(id?'Edit sourced details':'Add an official opportunity',`<form id="opportunity-form"><div class="notice">Copy verified details from the official notice. Leave unknown information blank. Importing a notice does not verify it or establish eligibility.</div><div class="grid-2"><label class="full">Settlement name<input name="title" value="${esc(o.title||'')}" required maxlength="300"></label><label class="full">Official claim URL<input name="official_url" type="url" value="${esc(o.official_url||'')}" required></label><label>Record classification<select name="record_type">${classifications.map(v=>`<option value="${v}" ${(o.record_type||'unknown')===v?'selected':''}>${readable(v)}</option>`).join('')}</select></label><label>Discovery stream<select name="program_type">${streams.slice(1).map(v=>`<option value="${v}" ${o.program_type===v?'selected':''}>${readable(v)}</option>`).join('')}</select></label><label>Official notice URL<input name="official_notice_url" type="url" value="${esc(o.official_notice_url||'')}"></label><label>Defendant<input name="defendant" value="${esc(o.defendant||'')}"></label><label>Claim window opens (with timezone)<input name="claim_opens_at" value="${esc(o.claim_opens_at||'')}"></label><label>Eligibility period starts<input type="date" name="eligibility_start" value="${esc(o.eligibility_start||'')}"></label><label>Eligibility period ends<input type="date" name="eligibility_end" value="${esc(o.eligibility_end||'')}"></label><label>Documentation requirements<textarea name="documentation_requirements">${esc(o.documentation_requirements||'')}</textarea></label><label>Stated payment timeline<textarea name="payment_timeline">${esc(o.payment_timeline||'')}</textarea></label><label>Administrator<input name="administrator" value="${esc(o.administrator||'')}"></label><label>Case number (include court)<input name="case_number" value="${esc(o.case_number||'')}"></label><label>Category<select name="category">${['consumer','data_breach','privacy','tcpa','other'].map(c=>`<option value="${c}" ${o.category===c?'selected':''}>${readable(c)}</option>`).join('')}</select></label><label>Proof requirement<select name="proof_required"><option value="">Unknown</option><option value="true" ${o.proof_required===true?'selected':''}>Proof required</option><option value="false" ${o.proof_required===false?'selected':''}>No proof indicated</option></select></label><label>Deadline (with timezone)<input name="deadline" placeholder="2030-06-30T23:59:00-05:00" value="${esc(o.deadline||'')}"></label><label>Sourced estimated payout (USD)<input name="expected_payout" type="number" step="0.01" min="0" value="${o.expected_payout??''}"></label><label class="full">Summary<textarea name="summary">${esc(o.summary||'')}</textarea></label><label class="full">Exact supporting source excerpt<textarea name="source_excerpt">${esc(o.provenance?.excerpt||'')}</textarea></label><label class="full">Exact official legal-attestation text<textarea name="attestation_text">${esc(o.attestation_text||'')}</textarea></label></div><h3 class="rules-title">Eligibility criteria</h3><p class="fact-hint">Use a stable fact key. Values use explicit types: true or false, a number, text in quotes, or a list such as ["CA", "NY"]. Copy criteria only from the official terms.</p><div id="rules">${(o.rules||[]).map(ruleRow).join('')}</div><button type="button" class="secondary" id="add-rule">+ Add criterion</button><div class="dialog-footer"><button type="submit" class="primary">Save for review</button></div></form>`);
-  $('#add-rule').onclick=()=>$('#rules').insertAdjacentHTML('beforeend',ruleRow());
-  $('#opportunity-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{
-    const f=new FormData(e.target), data=Object.fromEntries(f);
-    data.rules=$$('.rule-entry',e.target).map(row=>({field:$('.rule-field',row).value,op:$('.rule-op',row).value,value:JSON.parse($('.rule-value',row).value),question:$('.rule-question',row).value}));
-    for(const key of ['administrator','case_number','deadline','attestation_text','official_notice_url','defendant','claim_opens_at','eligibility_start','eligibility_end','documentation_requirements','payment_timeline'])data[key]=data[key]||null;
-    data.expected_payout=data.expected_payout===''?null:Number(data.expected_payout);
-    data.proof_required=data.proof_required===''?null:data.proof_required==='true';
-    const result=await api(id?`/opportunities/${id}`:'/opportunities',id?'PUT':'POST',data);closeModal();await reload();toast(result.duplicate?'Duplicate detected; existing opportunity preserved.':'Opportunity saved for source review.');
-  });};
-}
-function verifyForm(id) {
-  modal('Review the source, not just the promise.',`<form id="verify-form"><div class="notice">Check the court notice and administrator independently. HTTPS alone does not prove legitimacy. Never pay a fee to receive a settlement payout.</div><label class="check"><input type="checkbox" required name="administrator_verified">I checked the administrator’s identity against an independent official source.</label><label class="check"><input type="checkbox" required name="official_form_verified">I checked that the claim form belongs to the official settlement.</label><label class="check"><input type="checkbox" required name="criteria_and_deadline_verified">I checked the recorded criteria, deadline, payout information, and exact declaration against the notice.</label><label class="check"><input type="checkbox" required>I checked the official notice and confirmed that the claim window is currently open.</label><label>Evidence and review notes<textarea name="notes" minlength="10" required placeholder="Record the official reference and what you verified."></textarea></label><div class="dialog-footer"><button type="submit" class="primary">Record my source review</button></div></form>`);
-  $('#verify-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{await api(`/opportunities/${id}/verify`,'POST',{administrator_verified:true,official_form_verified:true,criteria_and_deadline_verified:true,claim_window_confirmed:true,notes:new FormData(e.target).get('notes')});closeModal();await reload();toast('Source review recorded.');});};
-}
-function evidenceForm(id) {
-  modal('Record the proof you actually hold.',`<form id="evidence-form"><div class="notice">Record a reference to your real receipt or document. Keep the original secure and upload it directly to the official administrator when required. This workspace stores references, not sensitive document files.</div><label>Evidence reference<input name="reference" required minlength="3" placeholder="Receipt number or a secure document reference"></label><label>What this evidence establishes<textarea name="description" required minlength="10"></textarea></label><label class="check"><input type="checkbox" required>I personally checked this evidence and its relevance to this settlement.</label><div class="dialog-footer"><button type="submit" class="primary">Record evidence reference</button></div></form>`);
-  $('#evidence-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{const f=new FormData(e.target);await api(`/opportunities/${id}/evidence`,'POST',{reference:f.get('reference'),description:f.get('description'),personally_verified:true});closeModal();await reload();toast('Evidence reference saved. Prepare a fresh packet to include it.');});};
-}
-function factRow(key='',value=null) {
-  const type=value===null?'unknown':typeof value;
-  return `<div class="fact-row"><input class="fact-key" aria-label="Fact key" placeholder="e.g. state" value="${esc(key)}" required><select class="fact-type" aria-label="Fact type">${[['unknown','Unknown'],['string','Text'],['boolean','Yes / No'],['number','Number']].map(([v,l])=>`<option value="${v}" ${type===v?'selected':''}>${l}</option>`).join('')}</select><input class="fact-value" aria-label="Fact value" placeholder="For Yes / No: true or false" value="${esc(value??'')}"><button type="button" class="icon-button remove-row" aria-label="Remove fact">×</button></div>`;
-}
-function renderProfile() {
-  heading('The facts that make it yours.','A considered profile. No inferred purchases, losses, dates, or declarations.');
-  const missing=[...new Set(state.data.opportunities.flatMap(o=>o.eligibility.reasons.filter(r=>r.result==='unknown').map(r=>r.field)))];
-  $('#view').innerHTML=`<div class="panel panel-body"><form id="profile-form"><div class="notice safe">Only record information you know to be accurate. Unknown is a valid answer. Profile changes require existing prepared claims to be prepared and approved again.</div><label>Profile display name<input name="name" required value="${esc(state.profile.name)}" maxlength="200"></label><h3 class="rules-title">Your recorded facts</h3><p class="fact-hint">Fact keys must match the criteria on an opportunity. Avoid entering government IDs, payment-card details, passwords, or unnecessary sensitive data.</p>${missing.length?`<p class="fact-hint">Requested by your opportunities: ${missing.map(esc).join(', ')}</p>`:''}<div id="facts">${Object.entries(state.profile.facts).map(([k,v])=>factRow(k,v)).join('')}</div><button type="button" class="secondary" id="add-fact">+ Add a fact</button><div class="dialog-footer"><button type="submit" class="primary">Save my facts</button></div></form></div>`;
-  $('#add-fact').onclick=()=>$('#facts').insertAdjacentHTML('beforeend',factRow());
-  $('#profile-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{
-    const facts={};for(const row of $$('.fact-row',e.target)){const key=$('.fact-key',row).value.trim(), type=$('.fact-type',row).value, raw=$('.fact-value',row).value;if(Object.hasOwn(facts,key))throw new Error('Duplicate fact key: '+key);if(['__proto__','constructor','prototype'].includes(key))throw new Error('Choose a different fact key.');let value=null;if(type==='string')value=raw;if(type==='number'){if(raw.trim()===''||!Number.isFinite(Number(raw)))throw new Error('Enter a valid number for '+key);value=Number(raw);}if(type==='boolean'){if(!['true','false'].includes(raw.toLowerCase()))throw new Error('Enter true or false for '+key);value=raw.toLowerCase()==='true';}facts[key]=value;}
-    await api('/profile','PUT',{name:new FormData(e.target).get('name'),facts});await reload();toast('Facts saved. Existing packets must be prepared again before approval.');
-  });};
-}
-function renderClaims() {
-  const approval=state.view==='approvals';heading(approval?'Your word. Your approval.':'Every claim, a clear record.',approval?'Review the exact facts and official declaration before you approve.':'Follow handoffs, confirmations, status changes, and actual payments.');
-  const items=state.data.claims.filter(c=>!approval||c.status==='prepared');
-  $('#view').innerHTML=`<div class="panel">${items.length?`<div class="table-scroll"><table><thead><tr><th>CLAIM</th><th>STATUS</th><th>UPDATED</th><th>PAYMENT</th><th></th></tr></thead><tbody>${items.map(c=>`<tr><td><button class="title-button" data-action="claim" data-id="${c.id}">${esc(c.packet.title)}</button><span class="sub">${esc(c.id.slice(0,8))} · ${c.confirmation?'Confirmation recorded':'No submission confirmation'}</span></td><td>${badge(readable(c.status),c.status==='prepared'?'amber':c.status==='rejected'?'red':'')}</td><td>${date(c.updated_at)}</td><td>${c.actual_payout!=null?money(c.actual_payout):'Not received'}<span class="sub">${c.expected_payment_date?'Expected '+date(c.expected_payment_date):'No payment date recorded'}</span></td><td>${button('claim','Review →','quiet',c.id)}</td></tr>`).join('')}</tbody></table></div>`:empty(approval?'Nothing awaiting your signature.':'Your claim ledger is ready.',approval?'Prepare an eligible, reviewed opportunity to create an approval packet.':'Prepared claims, submission confirmations, and payment updates will live here.','view-opportunities','Explore opportunities')}</div>`;
-}
-function showClaim(id) {
-  const c=state.data.claims.find(c=>c.id===id);if(!c)return;
-  const formAnswers=(c.packet.form_fields||[]).map(f=>`<div class="step"><strong>${esc(f.label)}</strong><span>${esc(f.value==null?'Not supplied':JSON.stringify(f.value))}<small> · Saved fact: ${esc(f.profile_key)}</small></span></div>`).join('');
-  const facts=(formAnswers?`<h3 class="rules-title">Filled official form answers</h3>${formAnswers}<h3 class="rules-title">Eligibility facts</h3>`:'')+Object.entries(c.packet.facts).map(([k,v])=>`<div class="step"><strong>${esc(k)}</strong><span>${esc(JSON.stringify(v))}</span></div>`).join('');
-  let controls='';
-  if(c.status==='prepared')controls=`<form id="approval-form"><label>Full name of the person approving<input name="signer_name" required minlength="2" autocomplete="name"></label><label class="check"><input type="checkbox" required>I reviewed every recorded fact above and confirm it is accurate.</label><label class="check"><input type="checkbox" required>I read and personally accept the exact official legal attestation shown above. The application has not made this declaration for me.</label><div class="dialog-footer"><button class="primary" type="submit">Approve this exact packet</button></div></form>`;
-  else if(c.status==='approved_for_handoff')controls=`<div class="notice">You approved this packet. The next step opens a handoff to the official form, where you complete the submission yourself.</div>${button('handoff','Continue to human submission →','primary',id)}`;
-  else if(c.status==='awaiting_human')controls=`<div class="notice">Complete the official form, CAPTCHA, identity checks, and legal declarations yourself. No submission is assumed.</div><div class="actions"><a href="${esc(c.packet.official_url)}" target="_blank" rel="noopener noreferrer" class="secondary">Open official form ↗</a>${button('confirmation','Record actual confirmation','primary',id)}</div>`;
-  else if(c.status!=='paid')controls=button('status','Record a status update','primary',id);
-  modal(c.packet.title,`<p>${badge(readable(c.status),'amber')}</p><h3 class="rules-title">Exact prepared facts</h3>${facts}<h3 class="rules-title">Recorded evidence references</h3><div class="evidence">${esc((c.packet.evidence||[]).map(e=>e.reference+': '+e.description).join('\n')||'No evidence references recorded.')}</div><h3 class="rules-title">Official legal attestation</h3><div class="evidence">${esc(c.packet.attestation_text)}</div><p class="fine">Packet fingerprint: ${esc(c.packet_hash)}<br>Prepared ${dateTime(c.packet.prepared_at)}. Changes to facts or source details require fresh preparation and approval.</p><a class="text-link" href="/api/claims/${c.id}/packet">Download this claim packet</a>${c.confirmation?`<h3 class="rules-title">User-provided confirmation</h3><div class="evidence">Reference: ${esc(c.confirmation.reference)}\nSubmitted: ${dateTime(c.confirmation.submitted_at)}\n${esc(c.confirmation.evidence)}</div>`:''}${c.approval?`<p class="fine">Approved by ${esc(c.approval.signer_name)} · ${dateTime(c.approval.approved_at)}</p>`:''}${c.actual_payout!=null?`<p>Actual payment recorded: <strong>${money(c.actual_payout)}</strong></p>`:''}<hr class="divider">${controls}`);
-  if($('#approval-form'))$('#approval-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{await api(`/claims/${id}/approve`,'POST',{packet_hash:c.packet_hash,facts_confirmed:true,legal_attestation_accepted:true,signer_name:new FormData(e.target).get('signer_name')});await reload();showClaim(id);toast('Your approval was recorded for this exact packet.');});};
-}
-function confirmationForm(id) {
-  modal('Capture the actual confirmation.',`<form id="confirmation-form"><div class="notice">Use the reference and evidence you actually received. Saving this record does not independently verify administrator acceptance.</div><label>Confirmation reference<input name="reference" required></label><label>Actual submission date and time (your local time)<input type="datetime-local" name="submitted_at" required step="1"></label><label>Receipt or confirmation text<textarea name="evidence" required minlength="10" placeholder="Paste the confirmation or describe the actual receipt, including its source."></textarea></label><label class="check"><input type="checkbox" required>I personally completed the official submission and all required human verification.</label><div class="dialog-footer"><button class="primary" type="submit">Save confirmation</button></div></form>`);
-  $('#confirmation-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{const data=Object.fromEntries(new FormData(e.target));data.submitted_at=new Date(data.submitted_at).toISOString();data.human_completed=true;await api(`/claims/${id}/confirmation`,'POST',data);closeModal();await reload();toast('Confirmation saved. Claim marked submitted, not accepted.');});};
-}
-function statusForm(id) {
-  const c=state.data.claims.find(c=>c.id===id), transitions={submitted:['under_review','needs_action','approved','rejected','paid'],under_review:['needs_action','approved','rejected','paid'],needs_action:['submitted','under_review','approved','rejected','paid'],approved:['needs_action','paid','rejected'],rejected:['under_review']};
-  modal('Record an evidenced update.',`<form id="status-form"><label>New status<select name="status">${(transitions[c.status]||[]).map(s=>`<option value="${s}">${readable(s)}</option>`).join('')}</select></label><div class="grid-2"><label>Actual received payment (paid status only)<input name="actual_payout" type="number" min="0" step="0.01"></label><label>Expected payment date (if stated)<input name="expected_payment_date" type="date"></label></div><label>Supporting correspondence or receipt<textarea name="evidence" required minlength="10" placeholder="Record the actual administrator message or payment receipt."></textarea></label><div class="dialog-footer"><button class="primary" type="submit">Record update</button></div></form>`);
-  $('#status-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{const data=Object.fromEntries(new FormData(e.target));data.actual_payout=data.actual_payout===''?null:Number(data.actual_payout);data.expected_payment_date=data.expected_payment_date?new Date(data.expected_payment_date+'T12:00:00').toISOString():null;await api(`/claims/${id}/status`,'POST',data);closeModal();await reload();toast('Status and supporting evidence recorded.');});};
-}
-async function renderSources() {
-  heading('Discovery, with discernment.','Connect official sources. Every imported candidate still needs your review.',button('import-catalog','Add supplied source catalog','secondary')+button('new-source','+ Connect source'));
-  $('#view').innerHTML='<div class="loading">Opening discovery sources…</div>';
-  const data=await api('/sources');
-  $('#view').innerHTML=`<div class="notice">Sources run daily when enabled. JSON feeds are imported directly; Public-link discovery needs no AI key. AI term extraction is optional. Breach announcements, government refunds, and settlements run as separate streams. Catalog sources start paused; configure their exact hostnames and review URLs before enabling. Sources never supply personal eligibility answers.</div><div class="panel">${data.sources.length?data.sources.map(s=>`<div class="source-card"><div class="section-title"><h3>${esc(s.name)}</h3>${badge(s.enabled?'DAILY DISCOVERY':'PAUSED',s.enabled?'':'gray')}</div><p>${esc(s.url)}</p><p>${esc(readable(s.stream))} · ${esc(readable(s.source_role))} · ${esc(s.kind)} · Last run: ${dateTime(s.last_run)}</p>${s.last_error?`<p class="form-error">${esc(s.last_error)}</p>`:''}<div class="actions">${button('run-source','Run discovery','secondary',s.id)}${button('toggle-source',s.enabled?'Pause':'Enable daily discovery','quiet',s.id)}</div></div>`).join(''):empty('Choose the sources you trust.','Connect a public HTTPS JSON feed or an official page for AI-assisted discovery. Hostnames must be explicitly allowed in your deployment.','new-source','Connect a source')}</div><div class="section-title"><h2>Discovery history</h2></div><div class="panel">${data.runs.length?data.runs.map(r=>`<div class="timeline-item"><h3>${badge(r.status,r.status==='failed'?'red':'')} ${r.imported} imported · ${r.duplicates} duplicates</h3><p>${esc(r.message)}</p><time>${dateTime(r.created_at)}</time></div>`).join(''):empty('No source runs yet.','Each run records imports, duplicates, or a visible failure.')}</div>`;
-}
-function sourceForm() {
-  modal('Connect a discovery source.',`<form id="source-form"><div class="notice">Use an official source or a feed you control. Its exact hostname must be listed in SOURCE_ALLOWED_HOSTS by the deployment owner.</div><label>Source name<input name="name" required></label><label>Public HTTPS URL<input name="url" type="url" required></label><label>Source format<select name="kind"><option value="html_links">Public HTML links · discovery leads</option><option value="json">Structured JSON feed</option><option value="html_ai">Official HTML page · AI extraction</option></select></label><label>Discovery stream<select name="stream">${streams.slice(1).map(v=>`<option value="${v}">${readable(v)}</option>`).join('')}</select></label><label>Source role<select name="source_role">${['directory','administrator','government','breach_notice'].map(v=>`<option value="${v}">${readable(v)}</option>`).join('')}</select></label><label class="check"><input type="checkbox" name="enabled">Run discovery daily</label><div class="dialog-footer"><button class="primary" type="submit">Connect source</button></div></form>`);
-  $('#source-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{const f=new FormData(e.target);await api('/sources','POST',{name:f.get('name'),url:f.get('url'),kind:f.get('kind'),stream:f.get('stream'),source_role:f.get('source_role'),enabled:f.has('enabled')});closeModal();await reload();toast('Source connected.');});};
-}
-function renderNotifications() {
-  heading('A watchful eye.','Deadline reminders, payment follow-ups, and status checks.',button('monitor','Check reminders','secondary'));
-  $('#view').innerHTML=`<div class="notice">Reminders prompt you to check official records. They never mark a claim accepted or paid without evidence. Notifications are delivered inside this private workspace.</div><div class="panel">${state.data.notifications.length?state.data.notifications.map(n=>`<div class="timeline-item"><div class="section-title"><h3>${!n.read?'<span class="status-dot"></span>':''}${esc(n.title)}</h3>${!n.read?button('read-notification','Mark read','quiet',n.id):badge('READ','gray')}</div><p>${esc(n.message)}</p><time>${dateTime(n.created_at)}</time></div>`).join(''):empty('Nothing needs your attention.','As your collection grows, your reminders will bloom here.')}</div>`;
-}
-let auditOffset=0;
-async function renderAudit() {
-  heading('The record of every decision.','An application-level audit trail of reviews, approvals, evidence, and status changes.');
-  const data=await api('/audit?offset='+auditOffset);
-  $('#view').innerHTML=`<div class="panel">${data.length?data.map(a=>`<div class="timeline-item"><h3>${esc(readable(a.action))} ${badge(a.actor,'gray')}</h3><p>Record ${esc(a.entity_id)}</p><details><summary>Event details</summary><pre class="evidence">${esc(JSON.stringify(a.details,null,2))}</pre></details><time>${dateTime(a.created_at)}</time></div>`).join(''):empty('A fresh page.','Your first source, profile change, or claim action will begin the record.')}</div><div class="dialog-footer">${auditOffset?button('audit-prev','← Newer','secondary'):''}${data.length===100?button('audit-next','Older →','secondary'):''}</div>`;
-}
 
-document.addEventListener('click',async e=>{
-  const remove=e.target.closest('.remove-row');if(remove){remove.closest('.rule-entry,.fact-row').remove();return;}
-  const nav=e.target.closest('[data-view]');if(nav){try{await navigate(nav.dataset.view);}catch(err){toast(err.message);}return;}
-  const filter=e.target.closest('[data-queue]');if(filter){state.queue=filter.dataset.queue;renderOpportunities();return;}
-  const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action,id=b.dataset.id;b.disabled=true;
-  try{
-    if(action.startsWith('view-')){closeModal();await navigate(action.slice(5));}
-    else if(action==='new-opportunity')opportunityForm();
-    else if(action==='edit-opportunity')opportunityForm(id);
-    else if(action==='opportunity')showOpportunity(id);
-    else if(action==='verify-opportunity')verifyForm(id);
-    else if(action==='evidence')evidenceForm(id);
-    else if(action==='prepare'){const c=await api(`/opportunities/${id}/prepare`,'POST');await reload();showClaim(c.id);toast('Claim packet prepared. Review every fact before approving.');}
-    else if(action==='claim')showClaim(id);
-    else if(action==='handoff'){const result=await api(`/claims/${id}/handoff`,'POST');await reload();modal('The next step is yours.',`<div class="notice">${esc(result.instructions)}</div><div class="dialog-footer"><a class="primary" href="${esc(result.url)}" target="_blank" rel="noopener noreferrer">Open official form ↗</a>${button('confirmation','Record confirmation','secondary',id)}</div>`);}
-    else if(action==='confirmation')confirmationForm(id);
-    else if(action==='status')statusForm(id);
-    else if(action==='import-catalog'){const r=await api('/source-catalog','POST');await reload();toast(`${r.added} source locations added, paused for configuration.`);}
-    else if(action==='observations'){const rows=await api(`/opportunities/${id}/observations`);modal('Discovery observations',rows.map(r=>`<details><summary>${dateTime(r.created_at)} · ${esc(r.changed_fields.join(', ')||'Initial or unchanged observation')}</summary><pre class="evidence">${esc(JSON.stringify(r.payload,null,2))}</pre></details>`).join('')||'<p>No observations recorded.</p>');}
-    else if(action==='duplicate-review'){const o=state.data.opportunities.find(o=>o.id===id);modal('Review possible duplicates',`<p>Compare these records before proceeding: ${o.possible_duplicate_ids.map(x=>esc(state.data.opportunities.find(v=>v.id===x)?.title||x)).join('; ')}</p><form id="duplicate-form"><label>Evidence that these are distinct cases<textarea name="notes" required minlength="20"></textarea></label><label class="check"><input type="checkbox" required>I reviewed the case identifiers and confirm this is a distinct claim opportunity.</label><button type="submit" class="primary">Record review</button></form>`);$('#duplicate-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{await api(`/opportunities/${id}/duplicate-review`,'POST',{distinct_case_confirmed:true,notes:new FormData(e.target).get('notes')});closeModal();await reload();});};}
-    else if(action==='new-source')sourceForm();
-    else if(action==='run-source'){toast('Reading source. This can take up to a minute.');const r=await api(`/sources/${id}/run`,'POST');await reload();toast(r.status==='failed'?r.message:`Discovery complete: ${r.imported} imported, ${r.duplicates} duplicates.`);}
-    else if(action==='toggle-source'){await api(`/sources/${id}/toggle`,'POST');await reload();}
-    else if(action==='monitor'){await api('/monitor','POST');await reload();toast('Deadline and payment reminders checked.');}
-    else if(action==='read-notification'){await api(`/notifications/${id}/read`,'POST');await reload();}
-    else if(action==='audit-next'){auditOffset+=100;await renderAudit();}
-    else if(action==='audit-prev'){auditOffset=Math.max(0,auditOffset-100);await renderAudit();}
-  }catch(error){toast(error.message);}finally{b.disabled=false;}
-});
-$('#login-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{const data=await api('/login','POST',{password:new FormData(e.target).get('password')});state.csrf=data.csrf_token;$('#login-screen').hidden=true;$('#workspace').hidden=false;e.target.reset();await reload();});};
-$('#close-dialog').onclick=closeModal;
-$('#refresh').onclick=()=>reload().catch(e=>toast(e.message));
-$('#logout').onclick=async()=>{try{await api('/logout','POST');showLogin();}catch(e){toast(e.message);}};
-api('/session').then(async data=>{state.csrf=data.csrf_token;$('#login-screen').hidden=true;$('#workspace').hidden=false;await reload();}).catch(()=>showLogin());
+class Input(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Rule(Input):
+    field: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
+    op: Literal["eq", "in", "gte", "lte", "date_on_or_after", "date_on_or_before"]
+    value: Any
+    question: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def valid_value(self):
+        from datetime import date
+        import math
+
+        def scalar(v):
+            return type(v) in (str, bool, int, float) and (not isinstance(v, float) or math.isfinite(v))
+
+        if self.op == "in":
+            if not isinstance(self.value, list) or not self.value or not all(scalar(v) for v in self.value):
+                raise ValueError("One-of requires a nonempty list of scalar values.")
+        elif not scalar(self.value):
+            raise ValueError("Rule value must be a finite scalar, not null.")
+        if self.op in {"gte", "lte"} and type(self.value) not in (int, float):
+            raise ValueError("Numeric comparison requires a number.")
+        if self.op.startswith("date_"):
+            if not isinstance(self.value, str):
+                raise ValueError("Date comparison requires an ISO date string.")
+            date.fromisoformat(self.value)
+        return self
+
+
+class OpportunityInput(Input):
+    title: str = Field(min_length=3, max_length=300)
+    official_url: str = Field(max_length=2000)
+    case_number: str | None = Field(default=None, max_length=200)
+    administrator: str | None = Field(default=None, max_length=300)
+    defendant: str | None = Field(default=None, max_length=300)
+    record_type: Literal[
+        "unknown",
+        "open_claim",
+        "investigation",
+        "breach_announcement",
+        "proposed_settlement",
+        "automatic_payment",
+        "expired",
+        "closed",
+    ] = "unknown"
+    program_type: Literal["settlements", "government_refunds", "breach_announcements"] = "settlements"
+    official_notice_url: str | None = Field(default=None, max_length=2000)
+    claim_opens_at: datetime | None = None
+    eligibility_start: date | None = None
+    eligibility_end: date | None = None
+    documentation_requirements: str | None = Field(default=None, max_length=10000)
+    payment_timeline: str | None = Field(default=None, max_length=5000)
+    category: Literal["consumer", "data_breach", "privacy", "tcpa", "other"] = "other"
+    summary: str = Field(default="", max_length=10000)
+    deadline: datetime | None = None
+    expected_payout: float | None = Field(default=None, ge=0, le=10000000, allow_inf_nan=False)
+    proof_required: bool | None = None
+    rules: list[Rule] = Field(default_factory=list, max_length=100)
+    attestation_text: str | None = Field(default=None, max_length=20000)
+    source_excerpt: str = Field(default="", max_length=30000)
+
+    @field_validator("official_url", "official_notice_url")
+    @classmethod
+    def valid_url(cls, value):
+        if value is None:
+            return None
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(value)
+        if parts.scheme not in {"http", "https"} or not parts.hostname or parts.username or parts.password:
+            raise ValueError("Use an HTTP(S) URL without embedded credentials")
+        return value
+
+    @field_validator("deadline", "claim_opens_at")
+    @classmethod
+    def timezone_required(cls, value):
+        if value and value.tzinfo is None:
+            raise ValueError("Deadline requires an explicit timezone offset")
+        return value.astimezone(timezone.utc) if value else None
+
+    @model_validator(mode="after")
+    def valid_periods(self):
+        if self.eligibility_start and self.eligibility_end and self.eligibility_start > self.eligibility_end:
+            raise ValueError("Eligibility start must be on or before eligibility end.")
+        if self.claim_opens_at and self.deadline and self.claim_opens_at >= self.deadline:
+            raise ValueError("Claim opening must precede deadline.")
+        return self
+
+
+class ProfileInput(Input):
+    name: str = Field(min_length=1, max_length=200)
+    facts: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("facts")
+    @classmethod
+    def validate_facts(cls, value):
+        import json
+
+        if len(json.dumps(value, allow_nan=False)) > 30000:
+            raise ValueError("Profile is too large")
+        if any(not isinstance(v, (str, bool, int, float, type(None))) for v in value.values()):
+            raise ValueError("Facts must be scalar values or null")
+        return value
+
+
+class VerifyInput(Input):
+    administrator_verified: Literal[True]
+    official_form_verified: Literal[True]
+    criteria_and_deadline_verified: Literal[True]
+    claim_window_confirmed: Literal[True]
+    notes: str = Field(min_length=10, max_length=5000)
+
+
+class ApprovalInput(Input):
+    packet_hash: str
+    facts_confirmed: Literal[True]
+    legal_attestation_accepted: Literal[True]
+    signer_name: str = Field(min_length=2, max_length=200)
+
+
+class ConfirmationInput(Input):
+    reference: str = Field(min_length=1, max_length=300)
+    submitted_at: datetime
+    evidence: str = Field(min_length=10, max_length=10000)
+    human_completed: Literal[True]
+
+    @field_validator("submitted_at")
+    @classmethod
+    def timezone_required(cls, value):
+        if value.tzinfo is None:
+            raise ValueError("Submission time requires a timezone")
+        return value
+
+
+class StatusInput(Input):
+    status: Literal["submitted", "under_review", "needs_action", "approved", "rejected", "paid"]
+    evidence: str = Field(min_length=10, max_length=10000)
+    actual_payout: float | None = Field(default=None, ge=0, le=10000000, allow_inf_nan=False)
+    expected_payment_date: datetime | None = None
+
+    @field_validator("expected_payment_date")
+    @classmethod
+    def timezone_required(cls, value):
+        if value and value.tzinfo is None:
+            raise ValueError("Expected payment date requires a timezone")
+        return value.astimezone(timezone.utc) if value else None
+
+
+class SourceInput(Input):
+    name: str = Field(min_length=1, max_length=200)
+    url: str = Field(max_length=2000)
+    kind: Literal["json", "html_ai", "html_links"] = "json"
+    stream: Literal["settlements", "government_refunds", "breach_announcements"] = "settlements"
+    source_role: Literal["directory", "administrator", "government", "breach_notice"] = "directory"
+    enabled: bool = False
+
+
+class LoginInput(Input):
+    password: str = Field(max_length=500)
+
+
+class EvidenceInput(Input):
+    reference: str = Field(min_length=3, max_length=1000)
+    description: str = Field(min_length=10, max_length=5000)
+    personally_verified: Literal[True]
+
+
+class DuplicateReviewInput(Input):
+    distinct_case_confirmed: Literal[True]
+    notes: str = Field(min_length=20, max_length=5000)
+
+
+class FormField(Input):
+    label: str = Field(min_length=1, max_length=300)
+    profile_key: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
+    kind: Literal["text", "number", "checkbox"] = "text"
+    required: bool = True
+
+
+class FormFieldsInput(Input):
+    fields: list[FormField] = Field(min_length=1, max_length=50)
+    official_fields_reviewed: Literal[True]
+
+    @model_validator(mode="after")
+    def unique_labels(self):
+        labels = [f.label.strip().casefold() for f in self.fields]
+        if len(set(labels)) != len(labels):
+            raise ValueError("Official field labels must be unique.")
+        return self

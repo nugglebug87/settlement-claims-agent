@@ -38,7 +38,7 @@ async function navigate(view) {state.view=view; state.queue='ALL'; await render(
 async function render() {
   $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
   $('#breadcrumb').textContent='Workspace / '+readable(state.view).replace(/^./,c=>c.toUpperCase());
-  const views={overview:renderOverview,opportunities:renderOpportunities,approvals:renderClaims,claims:renderClaims,profile:renderProfile,sources:renderSources,notifications:renderNotifications,audit:renderAudit};
+  const views={agents:renderAgents,overview:renderOverview,opportunities:renderOpportunities,approvals:renderClaims,claims:renderClaims,profile:renderProfile,sources:renderSources,notifications:renderNotifications,audit:renderAudit};
   await (views[state.view] || renderOverview)();
 }
 function opportunitiesTable(items) {
@@ -109,7 +109,8 @@ function renderClaims() {
 }
 function showClaim(id) {
   const c=state.data.claims.find(c=>c.id===id);if(!c)return;
-  const facts=Object.entries(c.packet.facts).map(([k,v])=>`<div class="step"><strong>${esc(k)}</strong><span>${esc(JSON.stringify(v))}</span></div>`).join('');
+  const formAnswers=(c.packet.form_fields||[]).map(f=>`<div class="step"><strong>${esc(f.label)}</strong><span>${esc(f.value==null?'Not supplied':JSON.stringify(f.value))}<small> · Saved fact: ${esc(f.profile_key)}</small></span></div>`).join('');
+  const facts=(formAnswers?`<h3 class="rules-title">Filled official form answers</h3>${formAnswers}<h3 class="rules-title">Eligibility facts</h3>`:'')+Object.entries(c.packet.facts).map(([k,v])=>`<div class="step"><strong>${esc(k)}</strong><span>${esc(JSON.stringify(v))}</span></div>`).join('');
   let controls='';
   if(c.status==='prepared')controls=`<form id="approval-form"><label>Full name of the person approving<input name="signer_name" required minlength="2" autocomplete="name"></label><label class="check"><input type="checkbox" required>I reviewed every recorded fact above and confirm it is accurate.</label><label class="check"><input type="checkbox" required>I read and personally accept the exact official legal attestation shown above. The application has not made this declaration for me.</label><div class="dialog-footer"><button class="primary" type="submit">Approve this exact packet</button></div></form>`;
   else if(c.status==='approved_for_handoff')controls=`<div class="notice">You approved this packet. The next step opens a handoff to the official form, where you complete the submission yourself.</div>${button('handoff','Continue to human submission →','primary',id)}`;
