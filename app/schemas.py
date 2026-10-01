@@ -177,3 +177,22 @@ class EvidenceInput(Input):
 class DuplicateReviewInput(Input):
     distinct_case_confirmed: Literal[True]
     notes: str = Field(min_length=20, max_length=5000)
+
+
+class FormField(Input):
+    label: str = Field(min_length=1, max_length=300)
+    profile_key: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
+    kind: Literal["text", "number", "checkbox"] = "text"
+    required: bool = True
+
+
+class FormFieldsInput(Input):
+    fields: list[FormField] = Field(min_length=1, max_length=50)
+    official_fields_reviewed: Literal[True]
+
+    @model_validator(mode="after")
+    def unique_labels(self):
+        labels = [f.label.strip().casefold() for f in self.fields]
+        if len(set(labels)) != len(labels):
+            raise ValueError("Official field labels must be unique.")
+        return self

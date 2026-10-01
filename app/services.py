@@ -16,6 +16,7 @@ from app.engine import (
     utcnow,
 )
 from app.models import Audit, Claim, DiscoveryObservation, Evidence, Notification, Opportunity
+from app.form_filler import fill_fields
 
 
 def audit(db, action, entity_id, details=None, actor="owner"):
@@ -222,6 +223,7 @@ def prepare(db, profile, opportunity):
         },
         "documentation_requirements": opportunity.documentation_requirements,
         "payment_timeline": opportunity.payment_timeline,
+        "form_fields": fill_fields(opportunity, profile),
     }
     digest = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()
     if not claim:

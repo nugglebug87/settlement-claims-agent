@@ -32,6 +32,7 @@ from app.schemas import (
     SourceInput,
     StatusInput,
     VerifyInput,
+    FormFieldsInput,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -291,6 +292,21 @@ def prepare_claim(id: str, db=Depends(get_db)):
     claim = services.prepare(db, person, opportunity)
     db.commit()
     return record(claim)
+
+
+@app.put("/api/opportunities/{id}/form-fields", dependencies=[Depends(authenticate)])
+def save_form_fields(id: str, data: FormFieldsInput, db=Depends(get_db)):
+    person = profile(db, True)
+    row = get_record(db, Opportunity, id, True)
+    existing = db.scalar(select(Claim).where(Claim.opportunity_id == id))
+    if existing and existing.status not in {"prepared", "approved_for_handoff"}:
+        raise HTTPException(409, "Form fields cannot change after submission handoff.")
+    services.ready(person, row)
+    row.provenance = {**row.provenance, "form_fields": [f.model_dump() for f in data.fields]}
+    row.revision += 1
+    services.audit(db, "form.fields_reviewed", id, {"field_count": len(data.fields)})
+    db.commit()
+    return record(row)
 
 
 @app.post("/api/opportunities/{id}/evidence", dependencies=[Depends(authenticate)])
