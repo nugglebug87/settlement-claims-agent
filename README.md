@@ -4,6 +4,14 @@ A deployable single-owner settlement workspace with a rose-led gothic editorial 
 
 **The MVP prepares claims and supports human submission. It does not automatically file claims.** It never invents purchases, losses, dates, eligibility answers, payout records, or legal declarations. The database starts empty; synthetic fixtures are confined to tests.
 
+## Agents in the app
+
+Open **Agents** in the sidebar. The Claims Search Agent runs a selected configured discovery source immediately and shows profile-based matches. Sources can be paused for daily monitoring and still run manually; source configuration and official review remain required.
+
+The Form Filler Agent lets you map exact official form labels to saved profile facts for a verified, eligible settlement. It fills those answers in a claim review packet, validates required values and types, and binds the filled answers to the existing approval fingerprint. Changes to mappings or profile facts invalidate earlier approval. Prepared packets can be downloaded. No database migration is needed because reviewed field mappings are retained in opportunity provenance and filled answers in claim packets.
+
+This release prepares answers inside the app. It does not type into external websites, apply a legally operative signature, or submit automatically. The app explicitly shows that these browser capabilities are not connected. Approval and the existing official-form handoff continue to work.
+
 ## Local setup
 
 Requires Python 3.13. PostgreSQL is required in production; SQLite is supported only for development.
