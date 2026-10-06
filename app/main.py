@@ -20,6 +20,7 @@ from app.config import settings
 from app.db import get_db
 from app.discovery import run_source, validate_source_url
 from app.engine import aware, case_key, evaluate, fingerprint, priority, quality_flags
+from app.claim_hunter_domain import combined_score, profile_completeness, queue_score
 from app.models import Audit, Claim, Evidence, Notification, Opportunity, Profile, Source, SourceRun
 from app.monitor import monitor, redis_client, start_worker
 from app.schemas import (
@@ -183,18 +184,29 @@ def save_profile(data: ProfileInput, db=Depends(get_db)):
 
 def enriched(opportunity, person):
     eligibility = evaluate(opportunity.rules, person.facts)
-    return {
-        **record(opportunity),
-        "classification": record_classification(opportunity),
-        "eligibility": eligibility,
-        "priority": priority(
+    completeness = profile_completeness(person.facts)
+    legacy_priority = priority(
             eligibility["status"],
             opportunity.deadline,
             opportunity.expected_payout,
             opportunity.category,
             opportunity.proof_required,
             opportunity.verified and record_classification(opportunity) == "open_claim",
+        )
+    eligibility_score = {"eligible": 100, "needs_answer": 50, "ineligible": 0}[eligibility["status"]]
+    confidence_adjusted = combined_score(eligibility_score, completeness)
+    return {
+        **record(opportunity),
+        "classification": record_classification(opportunity),
+        "eligibility": eligibility,
+        "profile_completeness": completeness,
+        "confidence_adjusted_score": confidence_adjusted,
+        "claim_hunter_queue_score": queue_score(
+            opportunity.deadline,
+            confidence_adjusted,
+            status="Discovered",
         ),
+        "priority": legacy_priority,
     }
 
 
