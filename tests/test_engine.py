@@ -56,3 +56,9 @@ def test_quality_flags_reject_suspicious_urls_and_fee_requests():
     assert "https_required" in flags
     assert "non_public_host" in flags
     assert "payment_request" in flags
+
+
+def test_dedupe_ignores_common_referral_parameters_and_fragments():
+    clean = fingerprint("https://Example.com/claim")
+    assert fingerprint("https://example.com/claim/?ref=newsletter#apply") == clean
+    assert fingerprint("https://example.com/claim/?gclid=abc#top") == clean
