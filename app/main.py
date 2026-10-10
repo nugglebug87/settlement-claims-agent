@@ -19,7 +19,9 @@ from app.auth import authenticate, create_session, rate_limit_login, signature
 from app.config import settings
 from app.db import get_db
 from app.discovery import run_source, validate_source_url
+from app.claim_form_search import discover_official_claim_forms
 from app.engine import aware, case_key, evaluate, fingerprint, priority, quality_flags
+from app.claim_hunter_domain import combined_score, profile_completeness, queue_score
 from app.models import Audit, Claim, Evidence, Notification, Opportunity, Profile, Source, SourceRun
 from app.monitor import monitor, redis_client, start_worker
 from app.schemas import (
@@ -183,18 +185,29 @@ def save_profile(data: ProfileInput, db=Depends(get_db)):
 
 def enriched(opportunity, person):
     eligibility = evaluate(opportunity.rules, person.facts)
-    return {
-        **record(opportunity),
-        "classification": record_classification(opportunity),
-        "eligibility": eligibility,
-        "priority": priority(
+    completeness = profile_completeness(person.facts)
+    legacy_priority = priority(
             eligibility["status"],
             opportunity.deadline,
             opportunity.expected_payout,
             opportunity.category,
             opportunity.proof_required,
             opportunity.verified and record_classification(opportunity) == "open_claim",
+        )
+    eligibility_score = {"eligible": 100, "needs_answer": 50, "ineligible": 0}[eligibility["status"]]
+    confidence_adjusted = combined_score(eligibility_score, completeness)
+    return {
+        **record(opportunity),
+        "classification": record_classification(opportunity),
+        "eligibility": eligibility,
+        "profile_completeness": completeness,
+        "confidence_adjusted_score": confidence_adjusted,
+        "claim_hunter_queue_score": queue_score(
+            opportunity.deadline,
+            confidence_adjusted,
+            status="Discovered",
         ),
+        "priority": legacy_priority,
     }
 
 
@@ -250,6 +263,19 @@ def edit_opportunity(id: str, data: OpportunityInput, db=Depends(get_db)):
     services.audit(db, "opportunity.updated", id, {"revision": row.revision})
     db.commit()
     return record(row)
+
+
+@app.get("/api/opportunities/{id}/claim-forms", dependencies=[Depends(authenticate)])
+def opportunity_claim_forms(id: str, db=Depends(get_db)):
+    """Read-only search; candidate links require user verification."""
+    opportunity = get_record(db, Opportunity, id)
+    try:
+        return discover_official_claim_forms(opportunity.official_url)
+    except (ValueError, OSError):
+        raise HTTPException(
+            422,
+            "Official website could not be safely inspected. Check its HTTPS host allowlist and availability.",
+        ) from None
 
 
 @app.get("/api/opportunities/{id}/observations", dependencies=[Depends(authenticate)])
