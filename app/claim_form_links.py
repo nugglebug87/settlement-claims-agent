@@ -41,3 +41,31 @@ def find_claim_form_links(html: str, official_url: str) -> list[str]:
             seen.add(normalized)
             results.append(normalized)
     return results
+
+
+_DOCUMENT_LABEL = re.compile(r"documents?|forms?\s*(?:and|&)\s*notices?|important\s+documents?", re.I)
+_DOCUMENT_PATH = re.compile(r"(?:^|/)(?:documents?|forms)(?:/|$)", re.I)
+
+
+def find_documents_pages(html: str, official_url: str) -> list[str]:
+    """Find same-host HTTPS document index pages for a bounded second fetch."""
+    base = urlsplit(official_url)
+    if base.scheme != "https" or not base.hostname:
+        raise ValueError("An official HTTPS URL is required.")
+    results = []
+    for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
+        target = urlsplit(urljoin(official_url, anchor["href"]))
+        if (
+            target.scheme != "https"
+            or target.hostname != base.hostname
+            or target.port not in (None, 443)
+            or target.username or target.password
+        ):
+            continue
+        if not (_DOCUMENT_LABEL.search(anchor.get_text(" ", strip=True))
+                or _DOCUMENT_PATH.search(target.path)):
+            continue
+        link = urlunsplit((target.scheme, target.netloc, target.path, target.query, ""))
+        if link not in results and link != official_url:
+            results.append(link)
+    return results[:5]
