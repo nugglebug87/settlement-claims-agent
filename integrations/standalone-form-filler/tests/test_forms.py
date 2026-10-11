@@ -48,3 +48,20 @@ def test_comb_fields_report_length_and_reject_overflow():
         fill_pdf(data, {"ZIP Code": "123456"})
     result = fill_pdf(data, {"ZIP Code": "56055"})
     assert PdfReader(BytesIO(result)).get_fields()["ZIP Code"].get("/V") == "56055"
+
+
+def test_comb_appearance_spaces_characters_into_cells():
+    import fitz
+    from reportlab.pdfgen import canvas
+    output = BytesIO()
+    c = canvas.Canvas(output)
+    c.acroForm.textfield(name="First Name", x=60, y=650, width=240, height=20, maxlen=12, fieldFlags="comb")
+    c.showPage()
+    c.save()
+    completed = fill_pdf(output.getvalue(), {"First Name": "AMBER"})
+    document = fitz.open(stream=completed, filetype="pdf")
+    words = document[0].get_text("words")
+    letters = [w for w in words if w[4] == "AMBER"]
+    assert not letters, "Comb appearance should not render the name as one continuous word"
+    assert any(w[4] == "A" for w in words)
+    assert any(w[4] == "M" for w in words)
