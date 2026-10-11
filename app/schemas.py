@@ -184,6 +184,13 @@ class FormField(Input):
     profile_key: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
     kind: Literal["text", "number", "checkbox"] = "text"
     required: bool = True
+    evidence_when_selected: bool = False
+
+    @model_validator(mode="after")
+    def evidence_requires_checkbox(self):
+        if self.evidence_when_selected and self.kind != "checkbox":
+            raise ValueError("Evidence-on-selection applies only to true/false benefit fields.")
+        return self
 
 
 class FormFieldsInput(Input):
