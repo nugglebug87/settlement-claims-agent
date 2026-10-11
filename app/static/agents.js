@@ -4,14 +4,33 @@ async function renderAgents() {
   heading('Your settlement agents.','Search for opportunities, then prepare their official form answers for your approval.');
   const data=await api('/sources');
   const ready=state.data.opportunities.filter(o=>o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible');
-  $('#view').innerHTML=`<div class="grid-2"><section class="panel panel-body"><p class="eyebrow">CLAIMS SEARCH AGENT</p><h2>Find a possible match.</h2><p>Read a configured discovery source and compare candidates with your saved eligibility facts. New discoveries require official source review.</p><form id="agent-search"><label>Search source<select name="source" required>${data.sources.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} · ${esc(readable(s.stream))}</option>`).join('')}</select></label><button class="primary" type="submit" ${data.sources.length?'':'disabled'}>Search for claims</button></form><p class="fine">${data.sources.length?'Search reads the selected source now, including paused sources. It does not enable daily monitoring.':'Add discovery sources before running a search.'}</p>${button('view-sources','Manage sources','secondary')}<div id="agent-search-result" role="status"></div></section><section class="panel panel-body"><p class="eyebrow">FORM FILLER AGENT</p><h2>Prepare your answers.</h2><p>Map the official form’s fields to your saved profile facts. The agent fills a review packet without guessing missing answers.</p><form id="agent-fill"><label>Verified eligible settlement<select name="opportunity" required>${ready.map(o=>`<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select></label><button class="primary" type="submit" ${ready.length?'':'disabled'}>Set up form & fill answers</button></form><p class="fine">${ready.length?'Each claim needs your review and approval.':'Review an official source and resolve eligibility answers to unlock preparation.'}</p>${button('view-opportunities','Review opportunities','secondary')}</section></div><div class="notice">Official website autofill, signature execution, and automatic submission are not connected yet. This agent prepares form answers inside your private app. After approval, open the official form and complete the filing there; record the actual confirmation afterward.</div><div class="section-title"><h2>Matches from your recorded facts</h2></div><div class="panel">${opportunitiesTable(state.data.opportunities.filter(o=>o.eligibility.status!=='ineligible').slice(0,10))}</div>`;
+  $('#view').innerHTML=`<div class="grid-2"><section class="panel panel-body"><p class="eyebrow">CLAIMS SEARCH AGENT</p><h2>Find claims to review.</h2><p>Search your configured sources now, then narrow the collection by company or product. Discovered leads require official-source review before claim preparation.</p><form id="agent-search"><label>Company or product (optional)<input type="search" name="query" id="claim-finder-query" maxlength="200" placeholder="e.g. Equifax or a brand you used"></label><fieldset><legend>Sources to search (choose up to five)</legend>${data.sources.map(s=>`<label class="check"><input type="checkbox" name="sources" value="${esc(s.id)}">${esc(s.name)} · ${esc(readable(s.stream))}</label>`).join('')}</fieldset><button class="primary" type="submit" ${data.sources.length?'':'disabled'}>Find claims</button></form><p class="fine">${data.sources.length?'Each selected source is read fresh, including paused sources. The company or product filter runs inside your app. This does not enable monitoring.':'Add discovery sources before running a search.'}</p>${button('view-sources','Manage sources','secondary')}<div id="agent-search-result" role="status"></div></section><section class="panel panel-body"><p class="eyebrow">FORM FILLER AGENT</p><h2>Prepare your answers.</h2><p>Map the official form’s fields to your saved profile facts. The agent fills a review packet without guessing missing answers.</p><form id="agent-fill"><label>Verified eligible settlement<select name="opportunity" required>${ready.map(o=>`<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select></label><button class="primary" type="submit" ${ready.length?'':'disabled'}>Set up form & fill answers</button></form><p class="fine">${ready.length?'Each claim needs your review and approval.':'Review an official source and resolve eligibility answers to unlock preparation.'}</p>${button('view-opportunities','Review opportunities','secondary')}</section></div><div class="notice">Official website autofill, signature execution, and automatic submission are not connected yet. This agent prepares form answers inside your private app. After approval, open the official form and complete the filing there; record the actual confirmation afterward.</div><div class="section-title"><h2>Claim finder results</h2></div><p id="claim-finder-summary" class="fine"></p><div class="panel" id="claim-finder-results"></div>`;
+  const filterResults=()=>{
+    if(!$('#claim-finder-query'))return;
+    const query=$('#claim-finder-query').value.trim().toLowerCase();
+    const items=state.data.opportunities.filter(o=>['open_claim','unknown'].includes(o.classification)&&o.eligibility.status!=='ineligible'&&(!query||[o.title,o.summary,o.defendant,o.administrator].some(v=>String(v||'').toLowerCase().includes(query))));
+    const reviewed=items.filter(o=>o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible');
+    $('#claim-finder-summary').textContent=`${items.length} results in your collection; ${reviewed.length} verified open claims match your recorded facts. Other results need source review or eligibility answers. A keyword match does not establish eligibility.`;
+    $('#claim-finder-results').innerHTML=opportunitiesTable(items);
+  };
+  $('#claim-finder-query').addEventListener('input',filterResults);
+  filterResults();
   $('#agent-search').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{
-    const id=new FormData(e.target).get('source');
-    $('#agent-search-result').textContent='Reading source…';
-    const result=await api(`/sources/${encodeURIComponent(id)}/run`,'POST');
-    await reload();
+    const ids=new FormData(e.target).getAll('sources');
+    if(!ids.length||ids.length>5)throw new Error('Choose between one and five sources.');
     const target=$('#agent-search-result');
-    if(target)target.textContent=result.status==='failed'?result.message:`Search complete: ${result.imported} new opportunities, ${result.duplicates} duplicates. Review the matches below.`;
+    const outcomes=[];
+    for(const [index,id] of ids.entries()){
+      const source=data.sources.find(s=>s.id===id);
+      target.textContent=`Reading ${index+1} of ${ids.length}: ${source.name}…`;
+      try{
+        const result=await api(`/sources/${encodeURIComponent(id)}/run`,'POST');
+        outcomes.push(result.status==='failed'?`${source.name}: failed — ${result.message}`:`${source.name}: ${result.imported} new leads, ${result.duplicates} duplicates.`);
+      }catch(error){outcomes.push(`${source.name}: failed — ${error.message}`);}
+    }
+    state.data=await api('/dashboard');
+    filterResults();
+    target.textContent=outcomes.join(' ');
   });};
   $('#agent-fill').onsubmit=e=>{e.preventDefault();formFieldsDialog(new FormData(e.target).get('opportunity'));};
 }
