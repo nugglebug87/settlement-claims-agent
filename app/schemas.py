@@ -179,12 +179,37 @@ class DuplicateReviewInput(Input):
     notes: str = Field(min_length=20, max_length=5000)
 
 
+class PdfPosition(Input):
+    # Points from the top-left of the unrotated page.
+    page: int = Field(ge=1, le=10)
+    x: float = Field(ge=0, le=2000, allow_inf_nan=False)
+    y: float = Field(ge=0, le=2000, allow_inf_nan=False)
+    width: float = Field(gt=0, le=2000, allow_inf_nan=False)
+    height: float = Field(ge=10, le=200, allow_inf_nan=False)
+
+
+class PdfTarget(Input):
+    field_name: str | None = Field(default=None, min_length=1, max_length=300)
+    position: PdfPosition | None = None
+
+    @model_validator(mode="after")
+    def one_destination(self):
+        if (self.field_name is None) == (self.position is None):
+            raise ValueError("Choose one PDF field or page position.")
+        return self
+
+
+class PdfUpload(Input):
+    pdf_base64: str = Field(min_length=8, max_length=4194304)
+
+
 class FormField(Input):
     label: str = Field(min_length=1, max_length=300)
     profile_key: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
     kind: Literal["text", "number", "checkbox"] = "text"
     required: bool = True
     evidence_when_selected: bool = False
+    pdf_target: PdfTarget | None = None
 
     @model_validator(mode="after")
     def evidence_requires_checkbox(self):
@@ -196,10 +221,21 @@ class FormField(Input):
 class FormFieldsInput(Input):
     fields: list[FormField] = Field(min_length=1, max_length=50)
     official_fields_reviewed: Literal[True]
+    pdf_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
     @model_validator(mode="after")
     def unique_labels(self):
         labels = [f.label.strip().casefold() for f in self.fields]
         if len(set(labels)) != len(labels):
             raise ValueError("Official field labels must be unique.")
+        if any(f.pdf_target for f in self.fields):
+            if not self.pdf_sha256 or any(f.pdf_target is None for f in self.fields):
+                raise ValueError(
+                    "PDF filling needs the reviewed PDF fingerprint and a destination for every field."
+                )
+            names = [f.pdf_target.field_name for f in self.fields if f.pdf_target.field_name]
+            if len(names) != len(set(names)):
+                raise ValueError("Map each interactive PDF field only once.")
+        elif self.pdf_sha256:
+            raise ValueError("Add PDF destinations before saving a PDF fingerprint.")
         return self

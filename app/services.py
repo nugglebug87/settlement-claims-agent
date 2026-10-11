@@ -224,6 +224,7 @@ def prepare(db, profile, opportunity):
         "documentation_requirements": opportunity.documentation_requirements,
         "payment_timeline": opportunity.payment_timeline,
         "form_fields": fill_fields(opportunity, profile, evidence),
+        "pdf_sha256": opportunity.provenance.get("pdf_sha256"),
     }
     digest = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()
     if not claim:
