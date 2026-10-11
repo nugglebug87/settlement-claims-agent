@@ -43,7 +43,7 @@ async def inspect(pdf: UploadFile = File(...), _: bool = Depends(authenticate)):
     except Exception: raise HTTPException(400, "Unable to read this PDF")
     if not fields: return page("<h2>No interactive fields found</h2><p>This PDF may be scanned or flattened. OCR support is not yet available.</p><a href='/'>Try another PDF</a>")
     # Stateless workflow: form is re-uploaded for filling. No server-side storage.
-    rows = "".join(f'<label for="field{i}">{escape(f["name"])}</label><input id="field{i}" name="field_{i}" placeholder="Enter reviewed answer">' for i,f in enumerate(fields))
+    rows = "".join(f'<label for="field{i}">{escape(f["name"])}</label><input id="field{i}" name="field_{i}" maxlength="{f.get('max_length') or 10000}" placeholder="Enter reviewed answer">' for i,f in enumerate(fields))
     return page('<h2>Review fields</h2><p>Enter the values you want in your completed PDF. For privacy, the document must be selected again before filling.</p><form action="/fill" method="post" enctype="multipart/form-data"><label for="pdf">Re-select same PDF</label><input id="pdf" type="file" name="pdf" accept=".pdf,application/pdf" required>' + rows + '<button>Download completed PDF</button></form>')
 
 @app.post("/fill")
@@ -54,6 +54,8 @@ async def fill(request: Request, pdf: UploadFile = File(...), _: bool = Depends(
         posted = await request.form()
         values = {field["name"]: str(posted[f"field_{i}"]) for i, field in enumerate(fields) if str(posted.get(f"field_{i}", "")).strip()}
         result = fill_pdf(data, values)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     except Exception:
         raise HTTPException(400, "Could not fill this PDF. Check the form and try again.")
     return StreamingResponse(BytesIO(result), media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="completed-form.pdf"', "Cache-Control": "no-store"})
