@@ -18,6 +18,12 @@ Changed source PDFs, stale profile/source revisions, oversized answers, invalid 
 
 This release prepares answers and unsigned PDF drafts inside the app. It does not type into external websites, apply a legally operative signature, or submit automatically. The app explicitly shows that these browser capabilities are not connected. Approval and the existing official-form handoff continue to work.
 
+### PDF extraction API
+
+`POST /api/pdf/inspect` accepts JSON containing `pdf_base64`. It requires a signed-in session, the configured Origin, and an `X-CSRF-Token`. It returns the original SHA-256 fingerprint, supported interactive fields (name, label, kind, required flag, and positions in points from the page's top-left), and page previews with extracted text. Page text is limited to 30,000 characters per page and is for review, not an eligibility attestation. `text_status: no_text_layer` means visual review is needed; OCR is not implemented. Upload bytes and extracted text are not saved by this endpoint.
+
+After reviewing the official fields, save mappings with `PUT /api/opportunities/{id}/form-fields`, prepare with `POST /api/opportunities/{id}/prepare`, and generate an unsigned draft with `POST /api/claims/{id}/pdf` using the same original PDF. Download from the returned session-bound URL within two minutes. Signature and certification fields remain manual. No browser extension is required for this PDF workflow.
+
 ## Local setup
 
 Requires Python 3.13. PostgreSQL is required in production; SQLite is supported only for development.

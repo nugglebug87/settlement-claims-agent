@@ -87,6 +87,7 @@ def widget_fields(reader):
 def inspect_pdf(encoded):
     data, reader = read_upload(encoded)
     fields = reader.get_fields() or {}
+    widgets = widget_fields(reader)
     result = {
         "sha256": hashlib.sha256(data).hexdigest(),
         "fields": [
@@ -96,9 +97,34 @@ def inspect_pdf(encoded):
         ],
         "pages": [],
     }
+    for field in result["fields"]:
+        source = fields[field["name"]]
+        field["label"] = str(source.get("/TU") or source.get("/TM") or field["name"])
+        field["required"] = bool(int(source.get("/Ff", 0)) & 2)
+        field["positions"] = []
+        for index, page in enumerate(reader.pages):
+            for ref in page.get("/Annots", []):
+                widget = ref.get_object()
+                if not any(n == field["name"] and w is widget for n, w, _ in widgets):
+                    continue
+                rect = widget["/Rect"]
+                field["positions"].append(
+                    {
+                        "page": index + 1,
+                        "x": float(rect[0]),
+                        "y": float(page.mediabox.height) - float(rect[3]),
+                        "width": float(rect[2] - rect[0]),
+                        "height": float(rect[3] - rect[1]),
+                    }
+                )
     with _render_lock, pdfium.PdfDocument(data) as doc:
         for index, page in enumerate(reader.pages):
             rendered_page = doc[index]
+            text_page = rendered_page.get_textpage()
+            try:
+                text = text_page.get_text_bounded()[:30000]
+            finally:
+                text_page.close()
             bitmap = rendered_page.render(scale=min(1.25, 1000 / float(page.mediabox.width)))
             try:
                 output = io.BytesIO()
@@ -111,6 +137,8 @@ def inspect_pdf(encoded):
                     "page": index + 1,
                     "width": float(page.mediabox.width),
                     "height": float(page.mediabox.height),
+                    "text": text,
+                    "text_status": "extracted" if text.strip() else "no_text_layer",
                     "image": "data:image/png;base64," + base64.b64encode(output.getvalue()).decode(),
                 }
             )

@@ -12,6 +12,9 @@ from app.config import settings
 
 @pytest.fixture
 def client(monkeypatch):
+    from app import auth
+
+    monkeypatch.setattr(auth, "_attempts", auth.defaultdict(auth.deque))
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     sessions = sessionmaker(engine, expire_on_commit=False)
