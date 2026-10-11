@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 
 
-def fill_fields(opportunity, person):
+def fill_fields(opportunity, person, evidence=None):
     fields = []
     for field in opportunity.provenance.get("form_fields", []):
         value = person.facts.get(field["profile_key"])
@@ -18,5 +18,9 @@ def fill_fields(opportunity, person):
                 raise HTTPException(409, f"{field['label']} requires a numeric profile fact.")
             if kind == "text" and not isinstance(value, str):
                 raise HTTPException(409, f"{field['label']} requires a text profile fact.")
+        if field.get("evidence_when_selected") and value is True and not evidence:
+            raise HTTPException(
+                409, f"{field['label']} requires an actual evidence reference before preparation."
+            )
         fields.append({**field, "value": value, "source": "recorded_profile"})
     return fields
