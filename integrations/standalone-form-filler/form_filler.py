@@ -1,7 +1,8 @@
 """Offline-first AcroForm extraction and reviewed filling utilities."""
 from io import BytesIO
 import re
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
+import fitz
 
 COMB_FLAG = 1 << 24
 
@@ -39,11 +40,18 @@ def fill_pdf(pdf_bytes, reviewed_values):
         limit = field.get("/MaxLen")
         if limit and len(str(value)) > int(limit):
             raise ValueError(f"{name} accepts at most {limit} characters; received {len(str(value))}")
-    writer = PdfWriter()
-    writer.append(reader)
-    writer.set_need_appearances_writer(True)
-    for page in writer.pages:
-        writer.update_page_form_field_values(page, {k: str(v) for k, v in reviewed_values.items()}, auto_regenerate=False)
-    output = BytesIO()
-    writer.write(output)
-    return output.getvalue()
+    # PyMuPDF regenerates true comb-field appearance streams with one glyph per cell.
+    # pypdf's generic appearance generation can clip or misalign these forms.
+    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    updated = set()
+    for page in document:
+        for widget in page.widgets() or []:
+            if widget.field_name in reviewed_values:
+                widget.field_value = str(reviewed_values[widget.field_name])
+                widget.update()
+                updated.add(widget.field_name)
+    if set(reviewed_values) - updated:
+        raise ValueError("Some form fields could not be located")
+    output = document.tobytes(garbage=3, deflate=True)
+    document.close()
+    return output
