@@ -100,6 +100,33 @@ def test_interactive_values_and_widget_appearances_survive_reopening():
     assert next(w for w in widgets if w["/T"] == "Cash")["/AS"] == "/Yes"
 
 
+def test_extraction_returns_source_text_and_top_left_field_positions(client):
+    encoded, digest = source_pdf(True)
+    response = client.post("/api/pdf/inspect", headers=login(client), json={"pdf_base64": encoded})
+    assert response.status_code == 200
+    info = response.json()
+    assert info["sha256"] == digest
+    assert "Synthetic form - tests only" in info["pages"][0]["text"]
+    assert "Second page preserved" in info["pages"][1]["text"]
+    assert all(page["text_status"] == "extracted" for page in info["pages"])
+    field = next(f for f in info["fields"] if f["name"] == "FirstName")
+    assert field["label"] == "FirstName"
+    assert field["required"] is False
+    assert field["positions"] == [{"page": 1, "x": 36, "y": 82, "width": 220, "height": 20}]
+
+
+def test_empty_text_layer_requires_visual_review():
+    output = io.BytesIO()
+    drawing = canvas.Canvas(output)
+    drawing.rect(20, 20, 100, 100)
+    drawing.showPage()
+    drawing.save()
+    info = inspect_pdf(base64.b64encode(output.getvalue()).decode())
+    assert info["pages"][0]["text"] == ""
+    assert info["pages"][0]["text_status"] == "no_text_layer"
+    assert info["fields"] == []
+
+
 def test_false_checkbox_is_explicitly_cleared():
     encoded, digest = source_pdf(True)
     draft = packet(digest, True)

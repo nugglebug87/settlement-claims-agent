@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- PDF inspection returns page text, interactive field labels, required flags, and top-left field positions. The review screen shows extracted text beside page previews.
+- Pages without a text layer explicitly require visual review; OCR is not implemented.
+
+### Fixed
+
+- API tests isolate login rate-limit state so additional endpoint tests do not cause unrelated sign-in failures.
+
 ## 0.1.0 — Initial MVP
 
 ### Added

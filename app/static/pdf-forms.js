@@ -33,7 +33,7 @@ function attachPdfSetup(opportunity) {
       const info=await api('/pdf/inspect','POST',{pdf_base64:encoded});
       digest=info.sha256;
       $('#pdf-details').textContent=`${info.pages.length} pages. Interactive fields: ${info.fields.map(f=>f.name+' ('+f.kind+')').join(', ')||'None; use page positions.'}`;
-      $('#pdf-pages').innerHTML=info.pages.map(page=>`<figure><figcaption>Page ${page.page}</figcaption><img class="pdf-page-image" data-page="${page.page}" src="${page.image}" alt="Source claim form page ${page.page}"></figure>`).join('');
+      $('#pdf-pages').innerHTML=info.pages.map(page=>`<figure><figcaption>Page ${page.page}</figcaption><img class="pdf-page-image" data-page="${page.page}" src="${page.image}" alt="Source claim form page ${page.page}"><details><summary>Extracted page text</summary><p class="fine">Check the original page for complete instructions and certifications.</p><pre>${esc(page.text||'No text layer found. Review the page image and map answers manually.')}</pre></details></figure>`).join('');
       $$('.pdf-page-image').forEach(image=>image.onclick=e=>{
         const rows=$$('.rule-entry',$('#mapped-fields'));
         const selected=rows[Number($('#pdf-placement-field').value)];
