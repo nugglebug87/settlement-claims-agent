@@ -30,3 +30,21 @@ def test_reject_unknown_field():
     import pytest
     with pytest.raises(ValueError):
         fill_pdf(sample_pdf(), {"Not a Field": "anything"})
+
+
+def test_comb_fields_report_length_and_reject_overflow():
+    from reportlab.pdfgen import canvas
+    import pytest
+    output = BytesIO()
+    c = canvas.Canvas(output)
+    c.acroForm.textfield(name="ZIP Code", x=70, y=700, width=200, height=25, maxlen=5, fieldFlags="comb")
+    c.showPage()
+    c.save()
+    data = output.getvalue()
+    fields = extract_fields(data)
+    assert fields[0]["max_length"] == 5
+    assert fields[0]["comb"] is True
+    with pytest.raises(ValueError, match="at most 5 characters"):
+        fill_pdf(data, {"ZIP Code": "123456"})
+    result = fill_pdf(data, {"ZIP Code": "56055"})
+    assert PdfReader(BytesIO(result)).get_fields()["ZIP Code"].get("/V") == "56055"
