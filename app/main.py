@@ -11,6 +11,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import services
+from app.pdf_forms import fill_pdf, inspect_pdf
+from app.pdf_downloads import remember_pdf, retrieve_pdf
 from app.source_catalog import CATALOG
 from app.engine import record_classification
 from app.models import DiscoveryObservation
@@ -33,6 +35,7 @@ from app.schemas import (
     StatusInput,
     VerifyInput,
     FormFieldsInput,
+    PdfUpload,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -63,8 +66,12 @@ async def security_headers(request, call_next):
         body = bytearray()
         async for chunk in request.stream():
             body.extend(chunk)
-            if len(body) > 150000:
-                return JSONResponse({"detail": "Request exceeds 150 KB limit."}, status_code=413)
+            pdf_request = request.url.path == "/api/pdf/inspect" or (
+                request.url.path.startswith("/api/claims/") and request.url.path.endswith("/pdf")
+            )
+            limit = 4300000 if pdf_request else 150000
+            if len(body) > limit:
+                return JSONResponse({"detail": "Request exceeds the upload limit."}, status_code=413)
         request._body = bytes(body)
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
@@ -302,7 +309,11 @@ def save_form_fields(id: str, data: FormFieldsInput, db=Depends(get_db)):
     if existing and existing.status not in {"prepared", "approved_for_handoff"}:
         raise HTTPException(409, "Form fields cannot change after submission handoff.")
     services.ready(person, row)
-    row.provenance = {**row.provenance, "form_fields": [f.model_dump() for f in data.fields]}
+    row.provenance = {
+        **row.provenance,
+        "form_fields": [f.model_dump() for f in data.fields],
+        "pdf_sha256": data.pdf_sha256,
+    }
     row.revision += 1
     services.audit(db, "form.fields_reviewed", id, {"field_count": len(data.fields)})
     db.commit()
@@ -361,6 +372,38 @@ def export_packet(id: str, db=Depends(get_db)):
     claim = get_record(db, Claim, id)
     return JSONResponse(
         claim.packet, headers={"Content-Disposition": f'attachment; filename="claim-{claim.id}.json"'}
+    )
+
+
+@app.post("/api/pdf/inspect", dependencies=[Depends(authenticate)])
+def inspect_uploaded_pdf(data: PdfUpload):
+    # Files are processed in memory. Only reviewed destinations and a digest are saved.
+    return inspect_pdf(data.pdf_base64)
+
+
+@app.post("/api/claims/{id}/pdf", dependencies=[Depends(authenticate)])
+def export_pdf(id: str, data: PdfUpload, request: Request, db=Depends(get_db)):
+    claim = get_record(db, Claim, id)
+    person = profile(db)
+    opportunity = get_record(db, Opportunity, claim.opportunity_id)
+    services.current_packet(claim, person, opportunity)
+    if claim.status not in {"prepared", "approved_for_handoff"}:
+        raise HTTPException(409, "PDF drafts are available before submission handoff only.")
+    url = remember_pdf(
+        fill_pdf(data.pdf_base64, claim.packet),
+        request.cookies["claims_session"],
+        f"claim-{claim.id}-unsigned-draft.pdf",
+    )
+    return {"download_url": url, "expires_in_seconds": 120}
+
+
+@app.get("/api/pdf/drafts/{token}", dependencies=[Depends(authenticate)])
+def download_pdf(token: str, request: Request):
+    data, filename = retrieve_pdf(token, request.cookies["claims_session"])
+    return Response(
+        data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
