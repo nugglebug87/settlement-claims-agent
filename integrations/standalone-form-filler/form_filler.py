@@ -3,6 +3,8 @@ from io import BytesIO
 import re
 from pypdf import PdfReader, PdfWriter
 
+COMB_FLAG = 1 << 24
+
 ALIASES = {
     "full_name": {"full name", "name", "claimant name", "your name"},
     "email": {"email", "email address", "e-mail"},
@@ -14,7 +16,7 @@ ALIASES = {
 def extract_fields(pdf_bytes):
     reader = PdfReader(BytesIO(pdf_bytes))
     fields = reader.get_fields() or {}
-    return [{"name": name, "type": str(data.get("/FT", "unknown"))} for name, data in fields.items()]
+    return [{"name": name, "type": str(data.get("/FT", "unknown")), "max_length": data.get("/MaxLen"), "comb": bool(int(data.get("/Ff", 0)) & COMB_FLAG)} for name, data in fields.items()]
 
 def suggest_mappings(field_names, profile):
     result = {}
@@ -32,6 +34,11 @@ def fill_pdf(pdf_bytes, reviewed_values):
     unknown = set(reviewed_values) - available
     if unknown:
         raise ValueError("Unknown form fields: " + ", ".join(sorted(unknown)))
+    for name, value in reviewed_values.items():
+        field = (reader.get_fields() or {})[name]
+        limit = field.get("/MaxLen")
+        if limit and len(str(value)) > int(limit):
+            raise ValueError(f"{name} accepts at most {limit} characters; received {len(str(value))}")
     writer = PdfWriter()
     writer.append(reader)
     writer.set_need_appearances_writer(True)
