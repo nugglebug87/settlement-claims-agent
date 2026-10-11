@@ -1,38 +1,61 @@
 'use strict';
 
-async function renderAgents() {
-  heading('Your settlement agents.','Search for opportunities, then prepare their official form answers for your approval.');
+async function renderClaimFinder() {
+  heading('Claim Finder','Find settlements to review in three simple steps.');
+  $('#view').innerHTML='<div class="loading">Opening Claim Finder…</div>';
   const data=await api('/sources');
-  const ready=state.data.opportunities.filter(o=>o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible');
-  $('#view').innerHTML=`<div class="grid-2"><section class="panel panel-body"><p class="eyebrow">CLAIMS SEARCH AGENT</p><h2>Find claims to review.</h2><p>Search your configured sources now, then narrow the collection by company or product. Discovered leads require official-source review before claim preparation.</p><form id="agent-search"><label>Company or product (optional)<input type="search" name="query" id="claim-finder-query" maxlength="200" placeholder="e.g. Equifax or a brand you used"></label><fieldset><legend>Sources to search (choose up to five)</legend>${data.sources.map(s=>`<label class="check"><input type="checkbox" name="sources" value="${esc(s.id)}">${esc(s.name)} · ${esc(readable(s.stream))}</label>`).join('')}</fieldset><button class="primary" type="submit" ${data.sources.length?'':'disabled'}>Find claims</button></form><p class="fine">${data.sources.length?'Each selected source is read fresh, including paused sources. The company or product filter runs inside your app. This does not enable monitoring.':'Add discovery sources before running a search.'}</p>${button('view-sources','Manage sources','secondary')}<div id="agent-search-result" role="status"></div></section><section class="panel panel-body"><p class="eyebrow">FORM FILLER AGENT</p><h2>Prepare your answers.</h2><p>Map the official form’s fields to your saved profile facts. The agent fills a review packet without guessing missing answers.</p><form id="agent-fill"><label>Verified eligible settlement<select name="opportunity" required>${ready.map(o=>`<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select></label><button class="primary" type="submit" ${ready.length?'':'disabled'}>Set up form & fill answers</button></form><p class="fine">${ready.length?'Each claim needs your review and approval.':'Review an official source and resolve eligibility answers to unlock preparation.'}</p>${button('view-opportunities','Review opportunities','secondary')}</section></div><div class="notice">Official website autofill, signature execution, and automatic submission are not connected yet. This agent prepares form answers inside your private app. After approval, open the official form and complete the filing there; record the actual confirmation afterward.</div><div class="section-title"><h2>Claim finder results</h2></div><p id="claim-finder-summary" class="fine"></p><div class="panel" id="claim-finder-results"></div>`;
+  if(state.view!=='overview')return;
+  const defaults=[...data.sources].sort((a,b)=>Number(b.enabled)-Number(a.enabled)).slice(0,5).map(s=>s.id);
+  $('#view').innerHTML=`<ol class="finder-steps"><li><strong>1. Find claims</strong><span>Enter a company or leave the box blank to browse.</span></li><li><strong>2. Check eligibility</strong><span>Open a result and compare the official rules with your facts.</span></li><li><strong>3. Prepare your form</strong><span>Eligible claims can move to Form Filler for your review.</span></li></ol><section class="panel panel-body finder-search"><h2>Find a settlement</h2><form id="agent-search"><label for="claim-finder-query">Company or product (optional)</label><div class="finder-search-row"><input type="search" name="query" id="claim-finder-query" maxlength="200" placeholder="e.g. a company or brand you used"><button class="primary" type="submit" ${data.sources.length?'':'disabled'}>Find claims</button></div><p class="finder-help">Leave blank to see all available leads. A company name filters results in your collection; it does not prove you qualify.</p>${data.sources.length?`<details class="finder-options"><summary>Search options · ${defaults.length} sources selected</summary><fieldset><legend>Choose up to five sources</legend>${data.sources.map(s=>`<label class="check"><input type="checkbox" name="sources" value="${esc(s.id)}" ${defaults.includes(s.id)?'checked':''}>${esc(s.name)}</label>`).join('')}</fieldset>${button('view-sources','Manage sources','quiet')}</details>`:`<div class="notice"><strong>Set up your first search</strong><p>No search sources are connected yet. Open source settings to connect a source, then return here to find claims.</p>${button('view-sources','Set up search sources','secondary')}</div>`}</form><p class="finder-help">Search checks your connected sources for fresh leads. Some sources may need setup before they can run.</p><div id="agent-search-result" role="status" aria-live="polite"></div></section><div class="section-title"><h2>Claims to review</h2>${button('view-profile','Add eligibility details','secondary')}</div><p id="claim-finder-summary" class="finder-help"></p><div id="claim-finder-results" class="finder-results"></div><details class="finder-options"><summary>Have a settlement notice already?</summary><p>Add the official notice to your collection to review its eligibility rules.</p>${button('new-opportunity','Add a settlement notice','secondary')}${button('view-opportunities','View all saved opportunities','quiet')}</details>`;
   const filterResults=()=>{
-    if(!$('#claim-finder-query'))return;
+    if(state.view!=='overview'||!$('#claim-finder-query'))return;
     const query=$('#claim-finder-query').value.trim().toLowerCase();
-    const items=state.data.opportunities.filter(o=>['open_claim','unknown'].includes(o.classification)&&o.eligibility.status!=='ineligible'&&(!query||[o.title,o.summary,o.defendant,o.administrator].some(v=>String(v||'').toLowerCase().includes(query))));
-    const reviewed=items.filter(o=>o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible');
-    $('#claim-finder-summary').textContent=`${items.length} results in your collection; ${reviewed.length} verified open claims match your recorded facts. Other results need source review or eligibility answers. A keyword match does not establish eligibility.`;
-    $('#claim-finder-results').innerHTML=opportunitiesTable(items);
+    const items=state.data.opportunities.filter(o=>['open_claim','unknown'].includes(o.classification)&&!o.priority.expired&&o.eligibility.status!=='ineligible'&&(!query||[o.title,o.summary,o.defendant,o.administrator].some(v=>String(v||'').toLowerCase().includes(query))));
+    $('#claim-finder-summary').textContent=`${items.length} ${items.length===1?'claim':'claims'} to review. Check the official rules before preparing a form.`;
+    $('#claim-finder-results').innerHTML=items.length?items.map(o=>{
+      const ready=o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible';
+      const status=ready?'Matches your saved facts':!o.verified||o.classification==='unknown'?'Official details need review':'More eligibility details needed';
+      return `<article class="panel panel-body finder-card"><p>${badge(status,ready?'':'amber')}</p><h3>${esc(o.title)}</h3><p class="finder-description">${esc(o.summary||'Open this claim to check the official eligibility rules and benefits.')}</p><dl class="finder-facts"><div><dt>Claim deadline</dt><dd>${date(o.deadline)}</dd></div><div><dt>Estimated payment</dt><dd>${money(o.expected_payout)}</dd></div></dl>${button('opportunity','Review claim →','secondary',o.id)}</article>`;
+    }).join(''):empty(query?'No claims match that name yet.':'No claims to review yet.',query?'Try another company or clear the box to browse all leads. Find claims checks connected sources for new leads.':'Click Find claims to check connected sources. You can also add a settlement notice you received.');
   };
   $('#claim-finder-query').addEventListener('input',filterResults);
+  const sourceInputs=$$('input[name=sources]');
+  sourceInputs.forEach(input=>input.addEventListener('change',()=>{
+    const count=sourceInputs.filter(i=>i.checked).length;
+    $('.finder-options summary').textContent=`Search options · ${count} sources selected`;
+    sourceInputs.forEach(i=>i.disabled=!i.checked&&count>=5);
+  }));
+  sourceInputs.forEach(i=>i.disabled=!i.checked&&defaults.length>=5);
   filterResults();
   $('#agent-search').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{
     const ids=new FormData(e.target).getAll('sources');
-    if(!ids.length||ids.length>5)throw new Error('Choose between one and five sources.');
-    const target=$('#agent-search-result');
+    if(!ids.length||ids.length>5)throw new Error('Open Search options and choose between one and five sources.');
+    const target=$('#agent-search-result'), submitButton=$('button[type=submit]',e.target);
     const outcomes=[];
-    for(const [index,id] of ids.entries()){
-      const source=data.sources.find(s=>s.id===id);
-      target.textContent=`Reading ${index+1} of ${ids.length}: ${source.name}…`;
-      try{
-        const result=await api(`/sources/${encodeURIComponent(id)}/run`,'POST');
-        outcomes.push(result.status==='failed'?`${source.name}: failed — ${result.message}`:`${source.name}: ${result.imported} new leads, ${result.duplicates} duplicates.`);
-      }catch(error){outcomes.push(`${source.name}: failed — ${error.message}`);}
-    }
-    state.data=await api('/dashboard');
-    filterResults();
-    target.textContent=outcomes.join(' ');
+    let failures=0, imported=0;
+    submitButton.textContent='Searching…';
+    try{
+      for(const [index,id] of ids.entries()){
+        const source=data.sources.find(s=>s.id===id);
+        target.textContent=`Checking source ${index+1} of ${ids.length}: ${source.name}…`;
+        try{
+          const result=await api(`/sources/${encodeURIComponent(id)}/run`,'POST');
+          if(result.status==='failed'){failures++;outcomes.push(`${source.name}: ${result.message}`);}
+          else{imported+=result.imported;outcomes.push(`${source.name}: ${result.imported} new leads, ${result.duplicates} already saved.`);}
+        }catch(error){failures++;outcomes.push(`${source.name}: ${error.message}`);}
+      }
+      state.data=await api('/dashboard');
+      filterResults();
+      target.innerHTML=`<p>${failures===ids.length?'Search could not read any selected sources. Saved results remain below.':`Search finished. ${imported} new leads added.${failures?' Some sources could not be read.':''}`}</p><details><summary>View search details</summary><ul>${outcomes.map(message=>`<li>${esc(message)}</li>`).join('')}</ul>${failures?button('view-sources','Open source settings','secondary'):''}</details>`;
+    }finally{submitButton.textContent='Find claims';}
   });};
-  $('#agent-fill').onsubmit=e=>{e.preventDefault();formFieldsDialog(new FormData(e.target).get('opportunity'));};
+}
+
+async function renderAgents() {
+  heading('Form Filler','Prepare answers for an eligible claim, then review your draft.');
+  const ready=state.data.opportunities.filter(o=>o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible'&&!o.priority.expired);
+  $('#view').innerHTML=`<section class="panel panel-body"><h2>Prepare your claim form</h2><p>Choose a settlement whose official rules have been reviewed and whose eligibility matches your saved facts.</p>${ready.length?`<form id="agent-fill"><label>Settlement<select name="opportunity" required>${ready.map(o=>`<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select></label><button class="primary" type="submit">Prepare form answers</button></form>`:empty('Find an eligible claim first.','Open Claim Finder, review a result, and add any missing eligibility details.','view-overview','Open Claim Finder')}<p class="finder-help">The form uses your saved facts. Add missing answers in your eligibility profile.</p></section><div class="notice">PDF drafts are unsigned. Review and approve each claim, then complete submission on the official website and save its confirmation.</div>`;
+  if($('#agent-fill'))$('#agent-fill').onsubmit=e=>{e.preventDefault();formFieldsDialog(new FormData(e.target).get('opportunity'));};
 }
 
 function mappedFieldRow(field={}) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- The home screen is now Claim Finder, with short instructions, a single search button, default source selections, and easy-to-read claim cards. Source options and search details expand when needed.
+- Form Filler has its own navigation entry and preparation screen.
+
 ### Added
 
 - PDF inspection returns page text, interactive field labels, required flags, and top-left field positions. The review screen shows extracted text beside page previews.
