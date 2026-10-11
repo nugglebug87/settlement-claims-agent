@@ -3,7 +3,7 @@ import os
 import secrets
 from io import BytesIO
 from html import escape
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from form_filler import extract_fields, fill_pdf, suggest_mappings
@@ -47,5 +47,13 @@ async def inspect(pdf: UploadFile = File(...), _: bool = Depends(authenticate)):
     return page('<h2>Review fields</h2><p>Enter the values you want in your completed PDF. For privacy, the document must be selected again before filling.</p><form action="/fill" method="post" enctype="multipart/form-data"><label for="pdf">Re-select same PDF</label><input id="pdf" type="file" name="pdf" accept=".pdf,application/pdf" required>' + rows + '<button>Download completed PDF</button></form>')
 
 @app.post("/fill")
-async def fill(pdf: UploadFile = File(...), _: bool = Depends(authenticate), **kwargs):
-    raise HTTPException(501, "Use the reviewed form endpoint")
+async def fill(request: Request, pdf: UploadFile = File(...), _: bool = Depends(authenticate)):
+    data = await read_pdf(pdf)
+    try:
+        fields = extract_fields(data)
+        posted = await request.form()
+        values = {field["name"]: str(posted[f"field_{i}"]) for i, field in enumerate(fields) if str(posted.get(f"field_{i}", "")).strip()}
+        result = fill_pdf(data, values)
+    except Exception:
+        raise HTTPException(400, "Could not fill this PDF. Check the form and try again.")
+    return StreamingResponse(BytesIO(result), media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="completed-form.pdf"', "Cache-Control": "no-store"})
