@@ -533,6 +533,13 @@ def read_audit(offset: int = 0, db=Depends(get_db)):
     ]
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(
+        STATIC / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-cache"}
+    )
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
