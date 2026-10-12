@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Combined Opportunities into Claim Finder, with a Show all saved claims option for closed records and announcements.
+
 - Removed Audit log from navigation; internal approval and submission records remain stored.
 
 - Simplified claim details to a name, short review box, website link, and one next-step button.

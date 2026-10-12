@@ -10,7 +10,7 @@ const readable = value => String(value || '').replaceAll('_',' ');
 const streams = ['ALL','settlements','government_refunds','breach_announcements'];
 const classifications = ['unknown','breach_announcement','investigation','proposed_settlement','open_claim','automatic_payment','expired','closed'];
 const queues = ['ALL','FILE NOW','HIGH VALUE','NO PROOF','DATA BREACH','PRIVACY','TCPA','NEEDS ANSWER'];
-const state = {csrf:'', view:'overview', queue:'ALL', stream:'ALL', data:{opportunities:[],claims:[],notifications:[]}, profile:null};
+const state = {csrf:'', view:'overview', finderAll:false, queue:'ALL', stream:'ALL', data:{opportunities:[],claims:[],notifications:[]}, profile:null};
 let toastTimer;
 
 async function api(path, method='GET', body) {
@@ -46,13 +46,7 @@ function opportunitiesTable(items) {
   return `<div class="table-scroll"><table><thead><tr><th>SETTLEMENT</th><th>ELIGIBILITY</th><th>DEADLINE</th><th>EST. PAYOUT</th><th>PRIORITY</th></tr></thead><tbody>${items.map(o=>`<tr><td><button class="title-button" data-action="opportunity" data-id="${o.id}">${esc(o.title)}</button><span class="sub">${esc(readable(o.classification))} · ${esc(readable(o.program_type))} · ${o.verified?'Source reviewed':'Awaiting source review'}</span></td><td>${badge(readable(o.eligibility.status),o.eligibility.status==='eligible'?'':o.eligibility.status==='ineligible'?'red':'amber')}</td><td>${date(o.deadline)}<span class="sub">${o.priority.expired?'Deadline passed':o.priority.days_remaining==null?'Needs verification':`${Math.ceil(o.priority.days_remaining)} days remaining`}</span></td><td>${money(o.expected_payout)}<span class="sub">${o.proof_required===false?'No proof indicated':o.proof_required===true?'Proof required':'Proof requirements unknown'}</span></td><td>${badge(o.priority.queues.includes('FILE NOW')?'FILE NOW':`SCORE ${o.priority.score}`,o.priority.queues.includes('FILE NOW')?'amber':'gray')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 async function renderOverview() { await renderClaimFinder(); }
-function renderOpportunities() {
-  heading('The opportunity collection.','Sourced, deduplicated, and evaluated against your recorded facts.',button('new-opportunity','+ Add opportunity'));
-  const items=state.data.opportunities.filter(o=>(state.queue==='ALL'||o.priority.queues.includes(state.queue))&&(state.stream==='ALL'||o.program_type===state.stream));
-  $('#view').innerHTML=`<div class="notice">Breach announcements remain on your radar even without compensation. Only verified open claims can move to preparation.</div><label>Discovery stream<select id="stream-filter">${streams.map(v=>`<option value="${v}" ${state.stream===v?'selected':''}>${readable(v)}</option>`).join('')}</select></label><div class="filters">${queues.map(q=>`<button class="filter ${state.queue===q?'active':''}" data-queue="${q}">${q} <span>${q==='ALL'?state.data.opportunities.length:state.data.opportunities.filter(o=>o.priority.queues.includes(q)).length}</span></button>`).join('')}</div><label class="search">Find a settlement<input id="opportunity-search" type="search" placeholder="Search your collection"></label><div class="panel" id="opportunity-table">${opportunitiesTable(items)}</div><p class="fine">Priority is a transparent sorting aid. Estimates are sourced values, not guarantees. “No proof” does not remove eligibility or legal-attestation requirements.</p>`;
-  $('#stream-filter').onchange=e=>{state.stream=e.target.value;renderOpportunities();};
-  $('#opportunity-search').addEventListener('input',e=>$('#opportunity-table').innerHTML=opportunitiesTable(items.filter(o=>o.title.toLowerCase().includes(e.target.value.toLowerCase()))));
-}
+async function renderOpportunities() { state.finderAll=true; await navigate('overview'); }
 function showOpportunity(id) {
   const o=state.data.opportunities.find(o=>o.id===id); if(!o)return;
   const ready=o.verified&&o.classification==='open_claim'&&o.eligibility.status==='eligible'&&!o.priority.expired;
