@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Simplified claim details to a name, short review box, website link, and one next-step button.
+- Replaced the manual source-review form with a direct Open claim page link for discovered leads.
+- Removed the Discovery observations and Edit details buttons from claim details to keep review focused on eligibility and the official form.
+
 - The home screen is now Claim Finder, with short instructions, a single search button, default source selections, and easy-to-read claim cards. Source options and search details expand when needed.
 - Form Filler has its own navigation entry and preparation screen.
 
