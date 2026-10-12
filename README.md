@@ -16,13 +16,23 @@ PDF drafts are available from the Agents field-mapping dialog. Choose a blank of
 
 Changed source PDFs, stale profile/source revisions, oversized answers, invalid destinations, signed/encrypted PDFs, XFA, rotated/cropped pages, ambiguous fields, and active document actions are rejected. Supported native fields are text and independent checkboxes; radio groups, choice fields and signatures require the official form. Standard PDF fonts must be able to represent the supplied answers. Evidence references are included in the review packet; evidence files are not embedded in the PDF.
 
-This release prepares answers and unsigned PDF drafts inside the app. It does not type into external websites, apply a legally operative signature, or submit automatically. The app explicitly shows that these browser capabilities are not connected. Approval and the existing official-form handoff continue to work.
+The app prepares answers and unsigned PDF drafts. An optional unpacked browser helper fills reviewed ordinary answers on the official website after explicit transmission authorization. Signing, certifications, attachments, and final submission remain human steps; approval and the official-form handoff continue to work.
 
 ### PDF extraction API
 
 `POST /api/pdf/inspect` accepts JSON containing `pdf_base64`. It requires a signed-in session, the configured Origin, and an `X-CSRF-Token`. It returns the original SHA-256 fingerprint, supported interactive fields (name, label, kind, required flag, and positions in points from the page's top-left), and page previews with extracted text. Page text is limited to 30,000 characters per page and is for review, not an eligibility attestation. `text_status: no_text_layer` means visual review is needed; OCR is not implemented. Upload bytes and extracted text are not saved by this endpoint.
 
 After reviewing the official fields, save mappings with `PUT /api/opportunities/{id}/form-fields`, prepare with `POST /api/opportunities/{id}/prepare`, and generate an unsigned draft with `POST /api/claims/{id}/pdf` using the same original PDF. Download from the returned session-bound URL within two minutes. Signature and certification fields remain manual. No browser extension is required for this PDF workflow.
+
+### Browser form helper
+
+Claim review dialogs offer a downloadable unpacked Chrome/Edge helper. Load the claim while its workspace review is open, keep that tab signed in, then open the exact official form in another tab and inspect it with the helper. Review each mapping and explicitly authorize transmitting the selected ordinary answers, including any immediate autosave. The extension rechecks the current packet before filling and rejects stale packets, completed submissions, changed fields, and mismatched destinations.
+
+Only visible ordinary text inputs and textareas in the top document are supported. Legal/sensitive fields are conservatively excluded by wording; these heuristics still need personal review. Checkboxes, choices, signatures, uploads, CAPTCHA and submission remain manual. The helper never clicks submit or records a claim as submitted. A prepared packet authorizes drafting only; final signing and submission require the separate claim-specific approval.
+
+The extension requests activeTab, scripting, and storage. It retains only a ten-minute claim reference in session storage; answer values are transient popup memory. There is no permanent website permission or cloud sync. The supported workspace origins are this project's current Railway domain and localhost:8000. See extension/README.md for installation, privacy limits, and testing. No database migration is needed.
+
+Endpoints: authenticated GET /api/browser-extension downloads the installable ZIP; GET /api/claims/{id}/browser-packet returns current ordinary answers and their packet hash without evidence or attestation text. Both responses use Cache-Control: no-store. Browser tests run with npm ci, npx playwright install chromium, and npm test in extension/.
 
 ## Local setup
 

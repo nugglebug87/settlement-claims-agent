@@ -10,3 +10,6 @@ __pycache__/
 work/
 test-results/
 output/pdf/
+output/browser-helper-review.png
+output/settlement-claim-form-helper.zip
+node_modules/

@@ -9,3 +9,5 @@ __pycache__
 *.sqlite*
 work
 test-results
+node_modules
+output

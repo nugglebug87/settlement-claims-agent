@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- Optional Chrome/Edge browser helper with current-packet checks, reviewed field mapping, and explicit authorization before transmitting ordinary answers to the exact official page.
+- Authenticated helper download and minimal browser-packet endpoint. Signing, checkboxes, attachments, and final submission remain manual.
+- Browser tests cover changed forms, existing answers, sensitive fields, consent, stale packets, and expired references.
+
 ### Changed
 
 - Simplified claim details to a name, short review box, website link, and one next-step button.

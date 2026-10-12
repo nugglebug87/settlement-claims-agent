@@ -1,5 +1,13 @@
 'use strict';
 
+function attachBrowserHelper(claim) {
+  const section=document.createElement('section');
+  section.id='browser-claim-context';
+  section.dataset.claimId=claim.id;
+  section.innerHTML=`<h3>Fill ordinary answers on the official website</h3><p>Use the optional Chrome/Edge helper to inspect page fields and review each mapping before filling. The site may save answers immediately, so the helper asks for transmission authorization. Signing, checkboxes, attachments, and submission stay manual.</p><p><a class="text-link" href="/api/browser-extension">Download browser helper ZIP</a></p><ol><li>Extract the ZIP. Open Chrome or Edge extension settings, enable Developer mode, and choose Load unpacked for the extracted folder.</li><li>Keep this claim review open. Click the helper in the browser toolbar and choose Load claim from workspace.</li><li>Open the <a class="text-link" href="${esc(claim.packet.official_url)}" target="_blank" rel="noopener noreferrer">official form</a> in another tab, open the helper again, and inspect the form.</li><li>Review mappings, authorize sending the selected answers, and fill. Check every answer on the official page before completing the remaining steps.</li></ol><p class="fine">The reference expires in ten minutes. Redirected URLs need review in the workspace. This helper never clicks a submit button or records a submission confirmation.</p>`;
+  $('#dialog-content').appendChild(section);
+}
+
 async function renderClaimFinder() {
   heading('Claim Finder','Find settlements to review in three simple steps.');
   $('#view').innerHTML='<div class="loading">Opening Claim Finder…</div>';
