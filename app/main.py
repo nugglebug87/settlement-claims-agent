@@ -405,6 +405,23 @@ def browser_packet(id: str, db=Depends(get_db)):
     }
 
 
+@app.get("/api/browser-extension", dependencies=[Depends(authenticate)])
+def download_browser_extension():
+    import io
+    import zipfile
+
+    source = Path(__file__).resolve().parents[1] / "extension"
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name in ("manifest.json", "page.js", "popup.js", "popup.html", "popup.css", "README.md"):
+            archive.write(source / name, name)
+    return Response(
+        output.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="settlement-claim-form-helper.zip"'},
+    )
+
+
 @app.post("/api/claims/{id}/pdf", dependencies=[Depends(authenticate)])
 def export_pdf(id: str, data: PdfUpload, request: Request, db=Depends(get_db)):
     claim = get_record(db, Claim, id)

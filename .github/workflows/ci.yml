@@ -24,6 +24,14 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check app tests && ruff format --check app tests migrations
       - run: pytest -q
+      - uses: actions/setup-node@v4
+        with: {node-version: "24"}
+      - name: Browser helper tests
+        working-directory: extension
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm test
       - name: PostgreSQL migrations and production startup
         env:
           APP_ENV: production

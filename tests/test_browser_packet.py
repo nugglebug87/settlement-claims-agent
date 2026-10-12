@@ -106,3 +106,26 @@ def test_browser_packet_available_during_handoff_but_not_after_submission(client
         },
     )
     assert client.get(path + "/browser-packet").status_code == 409
+
+
+def test_extension_download_is_authenticated_and_contains_only_installable_source(client):
+    import io
+    import json
+    import zipfile
+
+    assert client.get("/api/browser-extension").status_code == 401
+    login(client)
+    result = client.get("/api/browser-extension")
+    assert result.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(result.content)) as archive:
+        assert set(archive.namelist()) == {
+            "manifest.json",
+            "page.js",
+            "popup.js",
+            "popup.html",
+            "popup.css",
+            "README.md",
+        }
+        manifest = json.loads(archive.read("manifest.json"))
+        assert set(manifest["permissions"]) == {"activeTab", "scripting", "storage"}
+        assert "host_permissions" not in manifest and "content_scripts" not in manifest
