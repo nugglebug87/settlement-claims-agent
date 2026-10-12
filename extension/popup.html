@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Claim form helper</title><link rel="stylesheet" href="popup.css"><script src="page.js" defer></script><script src="popup.js" defer></script></head>
+<body><h1>Claim form helper</h1><p>Load a reviewed claim, then inspect its official page. Signatures, checkboxes, attachments, and submission stay manual.</p>
+<button id="load">1. Load claim from workspace</button><button id="inspect">2. Inspect official form</button><button id="clear">Forget loaded claim</button>
+<p id="status" role="status" aria-live="polite"></p>
+<section id="review" hidden><h2 id="title"></h2><p id="destination"></p><div id="mappings"></div><details><summary>Fields left for manual review</summary><ul id="manual"></ul></details>
+<label class="authorize"><input id="authorize" type="checkbox">I reviewed these mappings and authorize sending the selected ordinary answers to this exact official page, including any immediate autosave. None of the selected fields signs or certifies my claim.</label>
+<button id="fill" disabled>3. Fill selected answers</button></section>
+<p class="fine">Keep the workspace tab open. The claim reference expires after ten minutes. Answers stay in popup memory and are not stored or synced by this extension.</p></body></html>
