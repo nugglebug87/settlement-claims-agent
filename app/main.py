@@ -381,6 +381,30 @@ def inspect_uploaded_pdf(data: PdfUpload):
     return inspect_pdf(data.pdf_base64)
 
 
+@app.get("/api/claims/{id}/browser-packet", dependencies=[Depends(authenticate)])
+def browser_packet(id: str, db=Depends(get_db)):
+    from urllib.parse import urlsplit
+
+    claim, person, opportunity = claim_context(db, id)
+    services.current_packet(claim, person, opportunity)
+    if claim.status not in {"prepared", "approved_for_handoff", "awaiting_human"}:
+        raise HTTPException(409, "Browser filling is available before confirmed submission only.")
+    destination = urlsplit(claim.packet["official_url"])
+    if destination.scheme != "https" or destination.username or destination.password:
+        raise HTTPException(409, "Browser filling requires a verified HTTPS official form URL.")
+    return {
+        "claim_id": claim.id,
+        "title": claim.packet["title"],
+        "packet_hash": claim.packet_hash,
+        "official_url": claim.packet["official_url"],
+        "fields": [
+            {"label": f["label"], "kind": f["kind"], "value": f["value"]}
+            for f in claim.packet.get("form_fields", [])
+            if f["kind"] in {"text", "number"} and f.get("value") is not None
+        ],
+    }
+
+
 @app.post("/api/claims/{id}/pdf", dependencies=[Depends(authenticate)])
 def export_pdf(id: str, data: PdfUpload, request: Request, db=Depends(get_db)):
     claim = get_record(db, Claim, id)
