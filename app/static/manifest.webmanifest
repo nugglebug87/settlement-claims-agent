@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Settlement Assistant",
+  "short_name": "Claim Huntr",
+  "description": "Find settlements, review eligibility, and prepare your claims.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#171212",
+  "theme_color": "#171212",
+  "prefer_related_applications": false,
+  "icons": [
+    {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}

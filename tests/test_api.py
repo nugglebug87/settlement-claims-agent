@@ -46,6 +46,32 @@ def test_api_requires_login(client):
     assert client.get("/api/dashboard").status_code == 401
 
 
+def test_installable_app_assets_preserve_private_api_auth(client):
+    import io
+    import struct
+
+    page = client.get("/")
+    assert 'rel="manifest"' in page.text
+    manifest_response = client.get("/static/manifest.webmanifest")
+    assert manifest_response.status_code == 200
+    manifest = manifest_response.json()
+    assert manifest["start_url"] == manifest["scope"] == "/"
+    assert manifest["display"] == "standalone"
+    for icon in manifest["icons"]:
+        response = client.get(icon["src"])
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        dimensions = struct.unpack(">II", io.BytesIO(response.content).getvalue()[16:24])
+        assert icon["sizes"] == f"{dimensions[0]}x{dimensions[1]}"
+    assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+    worker = client.get("/sw.js")
+    assert worker.status_code == 200
+    assert "application/javascript" in worker.headers["content-type"]
+    assert worker.headers["cache-control"] == "no-cache"
+    assert "frame-ancestors 'none'" in worker.headers["content-security-policy"]
+    assert client.get("/api/dashboard").status_code == 401
+
+
 def test_profile_write_requires_csrf(client):
     login(client)
     assert client.put("/api/profile", json={"name": "Test", "facts": {}}).status_code == 403

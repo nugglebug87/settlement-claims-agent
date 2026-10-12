@@ -295,3 +295,9 @@ to open claims only when official evidence supports that change; historical obse
 remain available. At the default 15-minute worker interval, one due source in each stream
 runs per tick, with each source eligible again after 24 hours. This is a bounded listing
 monitor, not exhaustive web search or a guarantee that every new case will be found.
+
+## Install on your phone
+
+Open the live HTTPS app and choose **Install app**. On Android, use Chrome’s installation prompt or menu. On iPhone or iPad, open Safari, choose Share → Add to Home Screen → Add. The home-screen icon launches the same signed-in workspace in its own window. Desktop Chrome and Edge also support installation.
+
+The manifest includes 192px and 512px icons made from the supplied Claim Huntr thumbnail, plus an Apple touch icon. A root-scoped service worker handles an offline navigation message without caching pages, sessions, APIs, PDFs, or claim data. An internet connection is required; installation adds no background monitoring or submission capability. Browser installation UI and availability vary by device.

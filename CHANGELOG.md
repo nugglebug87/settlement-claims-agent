@@ -23,6 +23,8 @@
 
 ### Added
 
+- Home-screen installation for supported phone and desktop browsers, with the supplied Claim Huntr icon and iPhone/Android instructions. The installed app requires an internet connection.
+
 - PDF inspection returns page text, interactive field labels, required flags, and top-left field positions. The review screen shows extracted text beside page previews.
 - Pages without a text layer explicitly require visual review; OCR is not implemented.
 
