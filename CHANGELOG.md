@@ -10,6 +10,10 @@
 
 ### Changed
 
+- Combined Opportunities into Claim Finder, with a Show all saved claims option for closed records and announcements.
+
+- Removed Audit log from navigation; internal approval and submission records remain stored.
+
 - Simplified claim details to a name, short review box, website link, and one next-step button.
 - Replaced the manual source-review form with a direct Open claim page link for discovered leads.
 - Removed the Discovery observations and Edit details buttons from claim details to keep review focused on eligibility and the official form.
