@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from app import services
 from app.pdf_forms import fill_pdf, inspect_pdf
 from app.pdf_downloads import remember_pdf, retrieve_pdf
+from app.official_forms import find_form_candidates, retrieve_form_pdf
 from app.source_catalog import CATALOG
 from app.engine import record_classification
 from app.models import DiscoveryObservation
@@ -36,6 +37,7 @@ from app.schemas import (
     VerifyInput,
     FormFieldsInput,
     PdfUpload,
+    OfficialFormSelection,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -318,6 +320,28 @@ def save_form_fields(id: str, data: FormFieldsInput, db=Depends(get_db)):
     services.audit(db, "form.fields_reviewed", id, {"field_count": len(data.fields)})
     db.commit()
     return record(row)
+
+
+@app.get("/api/opportunities/{id}/form-candidates", dependencies=[Depends(authenticate)])
+def official_form_candidates(id: str, db=Depends(get_db)):
+    opportunity = get_record(db, Opportunity, id)
+    if not opportunity.official_notice_url:
+        raise HTTPException(409, "Add the official settlement notice URL before looking for its claim form.")
+    try:
+        return {"candidates": find_form_candidates(opportunity.official_notice_url)}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(422, f"Could not search the official notice: {exc}") from exc
+
+
+@app.post("/api/opportunities/{id}/official-form", dependencies=[Depends(authenticate)])
+def official_form_pdf(id: str, data: OfficialFormSelection, db=Depends(get_db)):
+    opportunity = get_record(db, Opportunity, id)
+    if not opportunity.official_notice_url:
+        raise HTTPException(409, "Add the official settlement notice URL before retrieving its claim form.")
+    try:
+        return retrieve_form_pdf(opportunity.official_notice_url, data.url)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(422, f"Could not retrieve that official form: {exc}") from exc
 
 
 @app.post("/api/opportunities/{id}/evidence", dependencies=[Depends(authenticate)])

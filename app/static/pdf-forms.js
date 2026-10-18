@@ -24,12 +24,12 @@ function collectPdfTarget(row) {
   return {position:Object.fromEntries(['page','x','y','width','height'].map(key=>[key,Number($('.pdf-'+key,row).value)]))};
 }
 
-function attachPdfSetup(opportunity) {
+function attachPdfSetup(opportunity, getRetrievedPdf=()=>null) {
   let digest=opportunity.provenance.pdf_sha256||null;
   $('#inspect-pdf').onclick=async()=>{
     const button=$('#inspect-pdf');button.disabled=true;
     try {
-      const encoded=await readPdfFile($('#pdf-source'));
+      const encoded=getRetrievedPdf()||await readPdfFile($('#pdf-source'));
       const info=await api('/pdf/inspect','POST',{pdf_base64:encoded});
       digest=info.sha256;
       $('#pdf-details').textContent=`${info.pages.length} pages. Interactive fields: ${info.fields.map(f=>f.name+' ('+f.kind+')').join(', ')||'None; use page positions.'}`;
@@ -60,9 +60,11 @@ function attachPdfSetup(opportunity) {
 }
 
 function pdfDraftDialog(claim) {
-  modal('Generate an unsigned PDF draft',`<p>${esc(claim.packet.title)}</p><p>Choose the exact blank PDF used to review this packet. The app processes it in memory and returns an unsigned draft. It does not save the uploaded PDF or sign, certify, or submit it.</p><p class="fine">Review every completed page and all attachments before approval. A PDF draft does not include evidence files.</p><form id="pdf-export-form"><label>Original blank PDF<input id="pdf-export-source" type="file" accept="application/pdf,.pdf" required></label><button type="submit" class="primary">Download unsigned PDF draft</button></form>`);
+  const cached=state.officialPdfs[claim.opportunity_id];
+  const cachedMatches=cached&&cached.sha256===claim.packet.pdf_sha256;
+  modal('Generate an unsigned PDF draft',`<p>${esc(claim.packet.title)}</p><p>${cachedMatches?'The retrieved official PDF is ready for this draft.':'Choose the exact blank PDF used to review this packet.'} The app processes it in memory and returns an unsigned draft. It does not save the uploaded PDF or sign, certify, or submit it.</p><p class="fine">Review every completed page and all attachments before approval. A PDF draft does not include evidence files.</p><form id="pdf-export-form">${cachedMatches?'<p class="fine">Using the PDF retrieved and reviewed for this claim.</p>':'<label>Original blank PDF<input id="pdf-export-source" type="file" accept="application/pdf,.pdf" required></label>'}<button type="submit" class="primary">Download unsigned PDF draft</button></form>`);
   $('#pdf-export-form').onsubmit=e=>{e.preventDefault();submit(e.target,async()=>{
-    const encoded=await readPdfFile($('#pdf-export-source'));
+    const encoded=cachedMatches?cached.pdf_base64:await readPdfFile($('#pdf-export-source'));
     const response=await fetch(`/api/claims/${claim.id}/pdf`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':state.csrf},body:JSON.stringify({pdf_base64:encoded})});
     if(!response.ok){const data=await response.json();throw new Error(typeof data.detail==='string'?data.detail:'Could not generate this draft.');}
     const result=await response.json();
