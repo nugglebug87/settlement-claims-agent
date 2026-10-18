@@ -4,6 +4,8 @@
 
 ### Added
 
+- Form Filler can search an official notice and linked Documents pages for claim-form PDFs, retrieve a selected verified link in memory, and reuse the existing PDF inspection and unsigned draft flow.
+- Authenticated form discovery and retrieval routes enforce HTTPS, public-IP DNS checks, host allowlists, no redirects, a 3 MB PDF limit, and current-link revalidation.
 - Optional Chrome/Edge browser helper with current-packet checks, reviewed field mapping, and explicit authorization before transmitting ordinary answers to the exact official page.
 - Authenticated helper download and minimal browser-packet endpoint. Signing, checkboxes, attachments, and final submission remain manual.
 - Browser tests cover changed forms, existing answers, sensitive fields, consent, stale packets, and expired references.

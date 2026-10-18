@@ -10,7 +10,7 @@ const readable = value => String(value || '').replaceAll('_',' ');
 const streams = ['ALL','settlements','government_refunds','breach_announcements'];
 const classifications = ['unknown','breach_announcement','investigation','proposed_settlement','open_claim','automatic_payment','expired','closed'];
 const queues = ['ALL','FILE NOW','HIGH VALUE','NO PROOF','DATA BREACH','PRIVACY','TCPA','NEEDS ANSWER'];
-const state = {csrf:'', view:'overview', finderAll:false, queue:'ALL', stream:'ALL', data:{opportunities:[],claims:[],notifications:[]}, profile:null};
+const state = {csrf:'', view:'overview', finderAll:false, queue:'ALL', stream:'ALL', data:{opportunities:[],claims:[],notifications:[]}, profile:null, officialPdfs:{}};
 let toastTimer;
 
 async function api(path, method='GET', body) {

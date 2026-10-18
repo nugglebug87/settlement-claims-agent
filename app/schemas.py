@@ -203,6 +203,20 @@ class PdfUpload(Input):
     pdf_base64: str = Field(min_length=8, max_length=4194304)
 
 
+class OfficialFormSelection(Input):
+    url: str = Field(min_length=8, max_length=2000)
+
+    @field_validator("url")
+    @classmethod
+    def https_url(cls, value):
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(value)
+        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+            raise ValueError("Choose an official HTTPS claim-form link without embedded credentials.")
+        return value
+
+
 class FormField(Input):
     label: str = Field(min_length=1, max_length=300)
     profile_key: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
