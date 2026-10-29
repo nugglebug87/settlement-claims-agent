@@ -102,3 +102,24 @@ def test_invalid_deadline_and_money_are_rejected(client):
         },
     )
     assert response.status_code == 422
+
+
+def test_profile_rejects_invalid_fact_names_and_nonfinite_values(client):
+    headers = login(client)
+    for facts in (
+        {"bad-key": "value"},
+        {"a" * 101: "value"},
+        {"nested": {"unexpected": True}},
+        {"value": 1e309},
+    ):
+        response = client.put(
+            "/api/profile",
+            headers=headers,
+            json={"name": "Synthetic test person", "facts": facts},
+        )
+        assert response.status_code == 422
+    assert client.put(
+        "/api/profile",
+        headers=headers,
+        json={"name": "Synthetic test person", "facts": {"state": "MN", "purchased": False}},
+    ).status_code == 200
