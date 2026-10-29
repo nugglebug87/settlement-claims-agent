@@ -107,8 +107,15 @@ class ProfileInput(Input):
 
         if len(json.dumps(value, allow_nan=False)) > 30000:
             raise ValueError("Profile is too large")
-        if any(not isinstance(v, (str, bool, int, float, type(None))) for v in value.values()):
+        import math
+        import re
+
+        if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", key) for key in value):
+            raise ValueError("Fact names must be valid field identifiers (up to 100 characters)")
+        if any(type(v) not in (str, bool, int, float, type(None)) for v in value.values()):
             raise ValueError("Facts must be scalar values or null")
+        if any(isinstance(v, float) and not math.isfinite(v) for v in value.values()):
+            raise ValueError("Facts must contain finite numeric values")
         return value
 
 
